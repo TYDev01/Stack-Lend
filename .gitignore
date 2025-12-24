@@ -1,2 +1,4 @@
 .vscode
 tsmd.md
+settings/Mainnet.toml
+settings/Testnet.toml
