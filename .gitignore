@@ -2,3 +2,6 @@
 tsmd.md
 settings/Mainnet.toml
 settings/Testnet.toml
+node_modules
+frontend/node_modules
+frontend/dist
