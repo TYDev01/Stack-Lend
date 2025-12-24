@@ -1,0 +1,9 @@
+[project]
+name = "stacks-lend"
+authors = []
+telemetry = false
+
+[contracts.p2p-lending]
+path = "contracts/p2p-lending.clar"
+clarity_version = 2
+epoch = 2.1
