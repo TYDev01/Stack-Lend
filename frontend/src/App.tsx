@@ -408,6 +408,31 @@ export default function App() {
     return { total, repaid, defaulted, active, repaymentRate };
   }, [borrowerLoans]);
 
+  const lenderRisk = useMemo(() => {
+    const total = lenderLoans.length;
+    const repaid = lenderLoans.filter((loan) => loan.status === STATUS.REPAID).length;
+    const defaulted = lenderLoans.filter((loan) => loan.status === STATUS.DEFAULTED).length;
+    const settled = repaid + defaulted;
+    const defaultRate = settled ? Math.round((defaulted / settled) * 100) : 0;
+    const ratios = lenderLoans
+      .map((loan) => {
+        const source = loanSources[loan.id];
+        if (!source || !Number(source.principal_amount)) return null;
+        return Number(source.collateral_amount) / Number(source.principal_amount);
+      })
+      .filter((value): value is number => value !== null && Number.isFinite(value));
+    const avgCollateralRatio =
+      ratios.length ? ratios.reduce((sum, value) => sum + value, 0) / ratios.length : 0;
+    return { total, repaid, defaulted, defaultRate, avgCollateralRatio };
+  }, [lenderLoans, loanSources]);
+
+  const riskLabel = (ratio: number) => {
+    if (!ratio) return "Unknown";
+    if (ratio < 1.2) return "High risk";
+    if (ratio < 1.5) return "Moderate risk";
+    return "Low risk";
+  };
+
   const statusBadgeClass = (status: bigint) => {
     switch (status) {
       case STATUS.OPEN:
@@ -1146,6 +1171,105 @@ export default function App() {
                 </div>
                 <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2 text-xs text-neutral-500">
                   Hook up event indexing for timestamps and richer risk signals.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Lender Risk Indicators</CardTitle>
+              <CardDescription>
+                Collateral ratio insights, volatility notes, and repayment history.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div>
+                  <p className="text-sm text-neutral-500">Total loans</p>
+                  <p className="text-2xl font-semibold">{lenderRisk.total}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Defaults</p>
+                  <p className="text-2xl font-semibold">{lenderRisk.defaulted}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Default rate</p>
+                  <p className="text-2xl font-semibold">{lenderRisk.defaultRate}%</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Avg collateral ratio</p>
+                  <p className="text-2xl font-semibold">
+                    {lenderRisk.avgCollateralRatio
+                      ? lenderRisk.avgCollateralRatio.toFixed(2) + "x"
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  Volatility note: assumes stable pricing
+                </Badge>
+                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  {address ? "Wallet-linked" : "Connect wallet for lender filtering"}
+                </Badge>
+              </div>
+              <div className="mt-4 space-y-2">
+                {lenderLoans.length ? (
+                  lenderLoans.slice(0, 3).map((loan) => {
+                    const source = loanSources[loan.id];
+                    const ratio = source
+                      ? Number(source.collateral_amount) / Number(source.principal_amount || 1)
+                      : 0;
+                    return (
+                      <div
+                        key={loan.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                      >
+                        <div>
+                          <span className="font-semibold">Loan #{loan.id}</span>
+                          <div className="text-xs text-neutral-500">
+                            {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
+                          </div>
+                        </div>
+                        <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          Collateral ratio {ratio ? ratio.toFixed(2) + "x" : "—"}
+                        </Badge>
+                        <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          {riskLabel(ratio)}
+                        </Badge>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-neutral-500">
+                    No lender loans available for risk analysis yet.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk Notes</CardTitle>
+              <CardDescription>Signal strength depends on indexed history.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm text-neutral-600">
+                <div className="flex items-center justify-between">
+                  <span>Repaid loans</span>
+                  <span className="font-semibold">{lenderRisk.repaid}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Settled loans</span>
+                  <span className="font-semibold">
+                    {lenderRisk.repaid + lenderRisk.defaulted}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2 text-xs text-neutral-500">
+                  Add oracle pricing to improve collateral volatility scoring.
                 </div>
               </div>
             </CardContent>
