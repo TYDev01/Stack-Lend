@@ -150,6 +150,7 @@ export default function App() {
   const [durationFilter, setDurationFilter] = useState({ min: "", max: "" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
+  const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
 
   const canRead = useMemo(
     () =>
@@ -309,6 +310,11 @@ export default function App() {
     return filteredLoans.slice(start, start + pageSize);
   }, [filteredLoans, page, pageSize]);
 
+  const selectedLoan = useMemo(() => {
+    if (selectedLoanId === null) return null;
+    return scannedLoans.find((loan) => loan.id === selectedLoanId) ?? null;
+  }, [scannedLoans, selectedLoanId]);
+
   const reminders = useMemo(() => {
     if (currentBlock === 0) {
       return [];
@@ -427,6 +433,16 @@ export default function App() {
       logLine(`Scanned loans ${scanRange.start} → ${scanRange.end}.`, current)
     );
     setPage(1);
+    setSelectedLoanId((current) => {
+      if (current === null) {
+        const next = cards[0]?.id ?? null;
+        if (next !== null) setManageLoanId(next);
+        return next;
+      }
+      const next = cards.some((loan) => loan.id === current) ? current : cards[0]?.id ?? null;
+      if (next !== null) setManageLoanId(next);
+      return next;
+    });
   };
 
   return (
@@ -1081,7 +1097,14 @@ export default function App() {
                   const source = loanSources[loan.id];
                   const aprValue = source ? calculateApr(source) : 0;
                   return (
-                  <div className="loan-card" key={loan.id}>
+                  <div
+                    className="loan-card cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg"
+                    key={loan.id}
+                    onClick={() => {
+                      setSelectedLoanId(loan.id);
+                      setManageLoanId(loan.id);
+                    }}
+                  >
                     <strong>Loan #{loan.id}</strong>
                     <span className="loan-tag">
                       Status: {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
@@ -1099,6 +1122,104 @@ export default function App() {
               ) : (
                 <p className="hint">No loans match the current filters.</p>
               )}
+            </div>
+            <div className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Loan Detail View</CardTitle>
+                  <CardDescription>
+                    Select a loan to review the full lifecycle, actions, and history.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedLoan ? (
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-lg font-semibold">
+                            Loan #{selectedLoan.id}
+                          </span>
+                          <Badge className={statusBadgeClass(selectedLoan.status)}>
+                            {STATUS_LABELS[selectedLoan.status.toString()] ?? "Unknown"}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-neutral-500">
+                          Borrower {formatAddress(selectedLoan.borrower)}
+                          <br />
+                          Lender {formatAddress(selectedLoan.lender)}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                            Principal {selectedLoan.principal}
+                          </Badge>
+                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                            Collateral {selectedLoan.collateral}
+                          </Badge>
+                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                            Repay {selectedLoan.repay}
+                          </Badge>
+                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                            End block {selectedLoan.endBlock}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                          Lifecycle Actions
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => handleAction("fund-loan")}>
+                            Fund loan
+                          </button>
+                          <button onClick={() => handleAction("repay")}>Repay</button>
+                          <button onClick={() => handleAction("claim-default")}>
+                            Claim default
+                          </button>
+                          <button
+                            className="ghost"
+                            onClick={() => handleAction("cancel-loan")}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                          Actions run against the selected loan ID.
+                        </p>
+                      </div>
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                          Transaction History
+                        </h3>
+                        <div className="space-y-2 text-sm text-neutral-600">
+                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                            <span>Created</span>
+                            <span className="text-neutral-500">On-chain</span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                            <span>Funded</span>
+                            <span className="text-neutral-500">
+                              {selectedLoan.status >= STATUS.FUNDED ? "Confirmed" : "Pending"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                            <span>Repayment</span>
+                            <span className="text-neutral-500">
+                              {selectedLoan.status >= STATUS.REPAID ? "Settled" : "Awaiting"}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                          Hook up an indexer later for detailed timestamps.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-500">
+                      Scan loans to populate the detail view.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-neutral-500">
