@@ -9,8 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@reown/appkit": "^1.0.0",
-    "@reown/appkit-adapter-stacks": "^1.0.0",
     "@radix-ui/react-tabs": "^1.1.1",
     "@stacks/connect": "^8.0.0",
     "@stacks/network": "^6.9.0",
