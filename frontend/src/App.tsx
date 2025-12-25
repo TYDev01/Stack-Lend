@@ -512,15 +512,15 @@ export default function App() {
   const statusBadgeClass = (status: bigint) => {
     switch (status) {
       case STATUS.OPEN:
-        return "border-amber-200 bg-amber-50 text-amber-700";
+        return "border-amber-500/40 bg-amber-900/40 text-amber-200";
       case STATUS.FUNDED:
-        return "border-emerald-200 bg-emerald-50 text-emerald-700";
+        return "border-emerald-500/40 bg-emerald-900/40 text-emerald-200";
       case STATUS.REPAID:
-        return "border-sky-200 bg-sky-50 text-sky-700";
+        return "border-sky-500/40 bg-sky-900/40 text-sky-200";
       case STATUS.DEFAULTED:
-        return "border-rose-200 bg-rose-50 text-rose-700";
+        return "border-rose-500/40 bg-rose-900/40 text-rose-200";
       case STATUS.CANCELLED:
-        return "border-neutral-200 bg-neutral-100 text-neutral-600";
+        return "border-slate-700 bg-slate-800 text-slate-300";
       default:
         return "";
     }
@@ -528,7 +528,7 @@ export default function App() {
 
   const renderLoanRows = (items: LoanSnapshot[], emptyLabel: string) => {
     if (!items.length) {
-      return <p className="text-sm text-neutral-500">{emptyLabel}</p>;
+      return <p className="text-sm text-slate-400">{emptyLabel}</p>;
     }
 
     return (
@@ -536,7 +536,7 @@ export default function App() {
         {items.slice(0, 4).map((loan) => (
           <div
             key={loan.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 p-3 text-sm"
           >
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -545,19 +545,19 @@ export default function App() {
                   {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
                 </Badge>
               </div>
-              <div className="text-xs text-neutral-500">
+              <div className="text-xs text-slate-400">
                 Borrower {formatAddress(loan.borrower)} • Lender{" "}
                 {formatAddress(loan.lender)}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
-              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+            <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+              <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                 Principal {loan.principal}
               </Badge>
-              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+              <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                 Repay {loan.repay}
               </Badge>
-              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+              <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                 End block {loan.endBlock}
               </Badge>
             </div>
@@ -648,7 +648,7 @@ export default function App() {
         message: `Borrower reminder: Loan #${loan.id} ends in ${
           loan.endBlock - currentBlock
         } blocks.`,
-        tone: "border-amber-200 bg-amber-50 text-amber-700",
+        tone: "border-amber-500/40 bg-amber-900/40 text-amber-200",
       });
     });
     upcomingLender.forEach((loan) => {
@@ -657,21 +657,21 @@ export default function App() {
         message: `Lender heads-up: Loan #${loan.id} ends in ${
           loan.endBlock - currentBlock
         } blocks.`,
-        tone: "border-sky-200 bg-sky-50 text-sky-700",
+        tone: "border-sky-500/40 bg-sky-900/40 text-sky-200",
       });
     });
     overdueBorrower.forEach((loan) => {
       items.push({
         id: `borrower-overdue-${loan.id}`,
         message: `Borrower alert: Loan #${loan.id} is past due.`,
-        tone: "border-rose-200 bg-rose-50 text-rose-700",
+        tone: "border-rose-500/40 bg-rose-900/40 text-rose-200",
       });
     });
     overdueLender.forEach((loan) => {
       items.push({
         id: `lender-overdue-${loan.id}`,
         message: `Lender alert: Loan #${loan.id} is past due.`,
-        tone: "border-rose-200 bg-rose-50 text-rose-700",
+        tone: "border-rose-500/40 bg-rose-900/40 text-rose-200",
       });
     });
 
@@ -1004,10 +1004,10 @@ export default function App() {
             key={toast.id}
             className={`border ${
               toast.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                ? "border-emerald-500/40 bg-emerald-900/40 text-emerald-200"
                 : toast.tone === "error"
-                ? "border-rose-200 bg-rose-50 text-rose-900"
-                : "border-sky-200 bg-sky-50 text-sky-900"
+                ? "border-rose-500/40 bg-rose-900/40 text-rose-200"
+                : "border-sky-500/40 bg-sky-900/40 text-sky-200"
             }`}
           >
             <CardHeader className="pb-2">
@@ -1096,7 +1096,7 @@ export default function App() {
               <p className="hint">WalletConnect chain: {chainId}</p>
             ) : null}
             {hasChainMismatch ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <div className="rounded-xl border border-amber-500/40 bg-amber-900/30 p-3 text-sm text-amber-200">
                 <p className="mb-2 font-semibold">Network mismatch</p>
                 <p className="mb-2 text-xs">
                   Connected to {chainId}, but this app expects {expectedChainId}.
@@ -1130,13 +1130,13 @@ export default function App() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge className="border-neutral-200 bg-white">
+              <Badge className="border-slate-700 bg-slate-900">
                 Scanned loans {scannedLoans.length}
               </Badge>
-              <Badge className="border-neutral-200 bg-white">
+              <Badge className="border-slate-700 bg-slate-900">
                 Current block {currentBlock || "Not set"}
               </Badge>
-              <Badge className="border-neutral-200 bg-white">
+              <Badge className="border-slate-700 bg-slate-900">
                 {address ? "Filtered to wallet" : "Connect wallet for filtering"}
               </Badge>
             </div>
@@ -1304,30 +1304,30 @@ export default function App() {
             <CardContent>
               <div className="grid gap-4 md:grid-cols-4">
                 <div>
-                  <p className="text-sm text-neutral-500">Total loans</p>
+                  <p className="text-sm text-slate-400">Total loans</p>
                   <p className="text-2xl font-semibold">{borrowerReputation.total}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Repaid</p>
+                  <p className="text-sm text-slate-400">Repaid</p>
                   <p className="text-2xl font-semibold">{borrowerReputation.repaid}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Defaulted</p>
+                  <p className="text-sm text-slate-400">Defaulted</p>
                   <p className="text-2xl font-semibold">{borrowerReputation.defaulted}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Active</p>
+                  <p className="text-sm text-slate-400">Active</p>
                   <p className="text-2xl font-semibold">{borrowerReputation.active}</p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                <Badge className="border-emerald-500/40 bg-emerald-900/40 text-emerald-200">
                   Repayment rate {borrowerReputation.repaymentRate}%
                 </Badge>
-                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                   {address ? "Wallet-linked" : "Connect wallet for borrower filtering"}
                 </Badge>
-                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                   Based on scanned loans
                 </Badge>
               </div>
@@ -1339,7 +1339,7 @@ export default function App() {
               <CardDescription>Quick context for lenders.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 text-sm text-neutral-600">
+              <div className="space-y-2 text-sm text-slate-300">
                 <div className="flex items-center justify-between">
                   <span>Settled loans</span>
                   <span className="font-semibold">
@@ -1350,7 +1350,7 @@ export default function App() {
                   <span>Open exposure</span>
                   <span className="font-semibold">{borrowerReputation.active}</span>
                 </div>
-                <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2 text-xs text-neutral-500">
+                <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-xs text-slate-400">
                   Hook up event indexing for timestamps and richer risk signals.
                 </div>
               </div>
@@ -1369,19 +1369,19 @@ export default function App() {
             <CardContent>
               <div className="grid gap-4 md:grid-cols-4">
                 <div>
-                  <p className="text-sm text-neutral-500">Total loans</p>
+                  <p className="text-sm text-slate-400">Total loans</p>
                   <p className="text-2xl font-semibold">{lenderRisk.total}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Defaults</p>
+                  <p className="text-sm text-slate-400">Defaults</p>
                   <p className="text-2xl font-semibold">{lenderRisk.defaulted}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Default rate</p>
+                  <p className="text-sm text-slate-400">Default rate</p>
                   <p className="text-2xl font-semibold">{lenderRisk.defaultRate}%</p>
                 </div>
                 <div>
-                  <p className="text-sm text-neutral-500">Avg collateral ratio</p>
+                  <p className="text-sm text-slate-400">Avg collateral ratio</p>
                   <p className="text-2xl font-semibold">
                     {lenderRisk.avgCollateralRatio
                       ? lenderRisk.avgCollateralRatio.toFixed(2) + "x"
@@ -1390,10 +1390,10 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                   Volatility note: assumes stable pricing
                 </Badge>
-                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                   {address ? "Wallet-linked" : "Connect wallet for lender filtering"}
                 </Badge>
               </div>
@@ -1407,25 +1407,25 @@ export default function App() {
                     return (
                       <div
                         key={loan.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 p-3 text-sm"
                       >
                         <div>
                           <span className="font-semibold">Loan #{loan.id}</span>
-                          <div className="text-xs text-neutral-500">
+                          <div className="text-xs text-slate-400">
                             {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
                           </div>
                         </div>
-                        <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                        <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                           Collateral ratio {ratio ? ratio.toFixed(2) + "x" : "—"}
                         </Badge>
-                        <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                        <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                           {riskLabel(ratio)}
                         </Badge>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-400">
                     No lender loans available for risk analysis yet.
                   </p>
                 )}
@@ -1438,7 +1438,7 @@ export default function App() {
               <CardDescription>Signal strength depends on indexed history.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 text-sm text-neutral-600">
+              <div className="space-y-2 text-sm text-slate-300">
                 <div className="flex items-center justify-between">
                   <span>Repaid loans</span>
                   <span className="font-semibold">{lenderRisk.repaid}</span>
@@ -1449,7 +1449,7 @@ export default function App() {
                     {lenderRisk.repaid + lenderRisk.defaulted}
                   </span>
                 </div>
-                <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2 text-xs text-neutral-500">
+                <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-xs text-slate-400">
                   Add oracle pricing to improve collateral volatility scoring.
                 </div>
               </div>
@@ -1468,7 +1468,7 @@ export default function App() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="text-sm text-neutral-500">
+                  <label className="text-sm text-slate-400">
                     Enable diagnostics
                     <select
                       value={showDiagnostics ? "on" : "off"}
@@ -1478,10 +1478,10 @@ export default function App() {
                       <option value="off">Off</option>
                     </select>
                   </label>
-                  <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                     API {config.apiUrl || "Not set"}
                   </Badge>
-                  <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                     Contract {config.address || "Not set"}
                   </Badge>
                 </div>
@@ -1502,22 +1502,22 @@ export default function App() {
                           </button>
                         </div>
                       </label>
-                      <div className="space-y-2 text-sm text-neutral-500">
-                        <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                      <div className="space-y-2 text-sm text-slate-400">
+                        <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                           Read-only sender: {config.readOnlySender || "Not set"}
                         </div>
-                        <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                        <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                           Contract name: {config.name}
                         </div>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-semibold text-neutral-500">Last result</p>
+                      <p className="text-sm font-semibold text-slate-400">Last result</p>
                       <pre className="log">{diagResult || "No diagnostics run yet."}</pre>
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-4 text-sm text-neutral-500">
+                  <p className="mt-4 text-sm text-slate-400">
                     Diagnostics are disabled. Toggle on to run read-only calls.
                   </p>
                 )}
@@ -1529,11 +1529,11 @@ export default function App() {
                 <CardDescription>Useful for dev-only testing.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 text-sm text-neutral-600">
-                  <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                <div className="space-y-2 text-sm text-slate-300">
+                  <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                     Track errors via the activity log and toast stack.
                   </div>
-                  <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                  <div className="rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                     Extend with event indexing once a backend indexer is live.
                   </div>
                 </div>
@@ -1561,10 +1561,10 @@ export default function App() {
                     onChange={(event) => setReminderWindow(Number(event.target.value))}
                   />
                 </div>
-                <Badge className="border-neutral-200 bg-white">
+                <Badge className="border-slate-700 bg-slate-900">
                   Current block {currentBlock || "Not set"}
                 </Badge>
-                <Badge className="border-neutral-200 bg-white">
+                <Badge className="border-slate-700 bg-slate-900">
                   {address ? "Filtered to wallet" : "Connect wallet for targeting"}
                 </Badge>
               </div>
@@ -1573,11 +1573,11 @@ export default function App() {
                   reminders.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 p-3 text-sm"
                     >
                       <Badge className={item.tone}>{item.message}</Badge>
                       <button
-                        className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition hover:bg-neutral-50"
+                        className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-medium text-slate-200 shadow-sm transition hover:bg-slate-800"
                         onClick={() => pushReminder(item.message)}
                       >
                         Add to activity log
@@ -1585,7 +1585,7 @@ export default function App() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-400">
                     No upcoming reminders yet. Set current block and scan loans to populate
                     alerts.
                   </p>
@@ -1601,19 +1601,19 @@ export default function App() {
             <CardContent>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Upcoming</span>
+                  <span className="text-slate-400">Upcoming</span>
                   <span className="font-semibold">
                     {reminders.filter((item) => item.id.includes("upcoming")).length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Overdue</span>
+                  <span className="text-slate-400">Overdue</span>
                   <span className="font-semibold">
                     {reminders.filter((item) => item.id.includes("overdue")).length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Total reminders</span>
+                  <span className="text-slate-400">Total reminders</span>
                   <span className="font-semibold">{reminders.length}</span>
                 </div>
               </div>
@@ -1635,21 +1635,21 @@ export default function App() {
                   tokens.map((token) => (
                     <div
                       key={token.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-900/80 p-3 text-sm"
                     >
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{token.symbol}</span>
-                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                             {token.name}
                           </Badge>
                           {token.id === defaultTokenId ? (
-                            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                            <Badge className="border-emerald-500/40 bg-emerald-900/40 text-emerald-200">
                               Default
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="text-xs text-neutral-500">
+                        <div className="text-xs text-slate-400">
                           {token.contract}
                         </div>
                       </div>
@@ -1671,7 +1671,7 @@ export default function App() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-400">
                     No tokens configured yet.
                   </p>
                 )}
@@ -1754,7 +1754,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-3">
-                <Badge className="border-neutral-200 bg-white">
+                <Badge className="border-slate-700 bg-slate-900">
                   Indexed loans {indexedLoanIds.length}
                 </Badge>
                 <button className="primary" onClick={handleIndexRefresh}>
@@ -1770,15 +1770,15 @@ export default function App() {
               </div>
               <div className="mt-4 space-y-3">
                 {indexedLoanIds.length ? (
-                  <div className="flex flex-wrap gap-2 text-xs text-neutral-600">
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-300">
                     {indexedLoanIds.map((id) => (
-                      <Badge key={id} className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                      <Badge key={id} className="border-slate-700 bg-slate-800 text-slate-300">
                         #{id}
                       </Badge>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-400">
                     Add loan IDs to build the index, or scan a range and save them.
                   </p>
                 )}
@@ -1833,7 +1833,7 @@ export default function App() {
                 </label>
                 <label>
                   Indexed loans
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-400">
                     {indexedLoanIds.length
                       ? `Next refresh will fetch ${indexedLoanIds.length} IDs.`
                       : "No indexed loans yet."}
@@ -1922,7 +1922,7 @@ export default function App() {
                       <div className="text-2xl font-semibold">
                         {repaymentSummary.totalDue}
                       </div>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-slate-400">
                         Interest: {repaymentSummary.interest}
                       </p>
                     </CardContent>
@@ -1936,7 +1936,7 @@ export default function App() {
                       <div className="text-2xl font-semibold">
                         {repaymentSummary.apr.toFixed(2)}%
                       </div>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-slate-400">
                         Per-block interest: {repaymentSummary.perBlock.toFixed(2)}
                       </p>
                     </CardContent>
@@ -1950,14 +1950,14 @@ export default function App() {
                       <div className="text-2xl font-semibold">
                         {calcInput.duration} blocks
                       </div>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-slate-400">
                         Blocks/year: {calcInput.blocksPerYear}
                       </p>
                     </CardContent>
                   </Card>
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-neutral-500">
+                <p className="mt-4 text-sm text-slate-400">
                   Enter principal, repay, and duration to see a breakdown.
                 </p>
               )}
@@ -1974,7 +1974,7 @@ export default function App() {
                   {repaymentSummary.checkpoints.map((point) => (
                     <div
                       key={point.label}
-                      className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2"
+                      className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2"
                     >
                       <span>{point.label} • block {point.block}</span>
                       <span className="font-semibold">{point.totalDue}</span>
@@ -1982,7 +1982,7 @@ export default function App() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">
+                <p className="text-sm text-slate-400">
                   Schedule appears once inputs are valid.
                 </p>
               )}
@@ -2571,28 +2571,28 @@ export default function App() {
                             {STATUS_LABELS[selectedLoan.status.toString()] ?? "Unknown"}
                           </Badge>
                         </div>
-                        <div className="text-sm text-neutral-500">
+                        <div className="text-sm text-slate-400">
                           Borrower {formatAddress(selectedLoan.borrower)}
                           <br />
                           Lender {formatAddress(selectedLoan.lender)}
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                             Principal {selectedLoan.principal}
                           </Badge>
-                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                             Collateral {selectedLoan.collateral}
                           </Badge>
-                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                             Repay {selectedLoan.repay}
                           </Badge>
-                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                          <Badge className="border-slate-700 bg-slate-800 text-slate-300">
                             End block {selectedLoan.endBlock}
                           </Badge>
                         </div>
                       </div>
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                           Lifecycle Actions
                         </h3>
                         <div className="flex flex-wrap gap-2">
@@ -2622,33 +2622,33 @@ export default function App() {
                             Cancel
                           </button>
                         </div>
-                        <p className="text-xs text-neutral-500">
+                        <p className="text-xs text-slate-400">
                           Actions run against the selected loan ID.
                         </p>
                       </div>
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                           Transaction History
                         </h3>
-                    <div className="space-y-2 text-sm text-neutral-600">
-                      <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                    <div className="space-y-2 text-sm text-slate-300">
+                      <div className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                         <span>Created</span>
-                        <span className="text-neutral-500">On-chain</span>
+                        <span className="text-slate-400">On-chain</span>
                       </div>
-                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                          <div className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                             <span>Funded</span>
-                            <span className="text-neutral-500">
+                            <span className="text-slate-400">
                               {selectedLoan.status >= STATUS.FUNDED ? "Confirmed" : "Pending"}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                          <div className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/80 px-3 py-2">
                             <span>Repayment</span>
-                            <span className="text-neutral-500">
+                            <span className="text-slate-400">
                               {selectedLoan.status >= STATUS.REPAID ? "Settled" : "Awaiting"}
                             </span>
                           </div>
                         </div>
-                        <p className="text-xs text-neutral-500">
+                        <p className="text-xs text-slate-400">
                           Hook up an indexer later for detailed timestamps.
                         </p>
                         <button className="ghost" onClick={handleExportRepaymentHistory}>
@@ -2657,7 +2657,7 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-neutral-500">
+                    <p className="text-sm text-slate-400">
                       Scan loans to populate the detail view.
                     </p>
                   )}
@@ -2665,14 +2665,14 @@ export default function App() {
               </Card>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
                 Showing {pagedLoans.length} of {filteredLoans.length}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button className="ghost" onClick={handleExportLoans}>
                   {t("exporter")}
                 </button>
-                <label className="text-sm text-neutral-500">
+                <label className="text-sm text-slate-400">
                   Page size
                   <select
                     value={pageSize}
@@ -2693,7 +2693,7 @@ export default function App() {
                 >
                   Prev
                 </button>
-                <span className="text-sm text-neutral-500">
+                <span className="text-sm text-slate-400">
                   Page {page} of {totalPages}
                 </span>
                 <button
