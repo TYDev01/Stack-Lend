@@ -40,6 +40,8 @@ const STATUS_LABELS: Record<string, string> = {
   [STATUS.CANCELLED.toString()]: "Cancelled",
 };
 
+const BLOCKS_PER_YEAR = 52560;
+
 type LoanSnapshot = {
   id: number;
   principal: string;
@@ -70,6 +72,19 @@ const formatAddress = (value?: string | null) => {
 };
 
 const normalizeAddress = (value?: string | null) => value?.toLowerCase() ?? "";
+
+const parseAsset = (value: string) => (value.includes("STX") ? "stx" : "sbtc");
+
+const calculateApr = (loanSource: Loan) => {
+  const principal = Number(loanSource.principal_amount);
+  const repay = Number(loanSource.repay_amount);
+  const startBlock = Number(loanSource.start_block);
+  const endBlock = Number(loanSource.end_block);
+  const duration = endBlock - startBlock;
+  if (!principal || duration <= 0 || repay <= principal) return 0;
+  const interest = (repay - principal) / principal;
+  return (interest * (BLOCKS_PER_YEAR / duration)) * 100;
+};
 
 const callContract = async (
   config: ContractConfig,
@@ -128,6 +143,13 @@ export default function App() {
   const [manageLoanId, setManageLoanId] = useState(1);
   const [scanRange, setScanRange] = useState({ start: 1, end: 5 });
   const [scannedLoans, setScannedLoans] = useState<LoanSnapshot[]>([]);
+  const [loanSources, setLoanSources] = useState<Record<number, Loan>>({});
+  const [statusFilter, setStatusFilter] = useState("open");
+  const [assetFilter, setAssetFilter] = useState("all");
+  const [aprFilter, setAprFilter] = useState({ min: "", max: "" });
+  const [durationFilter, setDurationFilter] = useState({ min: "", max: "" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
 
   const canRead = useMemo(
     () =>
@@ -136,11 +158,6 @@ export default function App() {
       config.apiUrl &&
       config.readOnlySender,
     [config]
-  );
-
-  const openLoans = useMemo(
-    () => scannedLoans.filter((loan) => loan.status === STATUS.OPEN),
-    [scannedLoans]
   );
 
   const borrowerLoans = useMemo(() => {
@@ -248,6 +265,50 @@ export default function App() {
     );
   };
 
+  const filteredLoans = useMemo(() => {
+    const minApr = aprFilter.min ? Number(aprFilter.min) : null;
+    const maxApr = aprFilter.max ? Number(aprFilter.max) : null;
+    const minDuration = durationFilter.min ? Number(durationFilter.min) : null;
+    const maxDuration = durationFilter.max ? Number(durationFilter.max) : null;
+
+    return scannedLoans.filter((loan) => {
+      if (statusFilter !== "all") {
+        const label = STATUS_LABELS[loan.status.toString()]?.toLowerCase();
+        if (label !== statusFilter) return false;
+      }
+
+      if (assetFilter !== "all") {
+        const principalAsset = parseAsset(loan.principal);
+        const collateralAsset = parseAsset(loan.collateral);
+        if (assetFilter === "principal-stx" && principalAsset !== "stx") return false;
+        if (assetFilter === "principal-sbtc" && principalAsset !== "sbtc") return false;
+        if (assetFilter === "collateral-stx" && collateralAsset !== "stx") return false;
+        if (assetFilter === "collateral-sbtc" && collateralAsset !== "sbtc") return false;
+      }
+
+      const source = loanSources[loan.id];
+      const durationValue = source
+        ? Number(source.end_block) - Number(source.start_block)
+        : loan.endBlock;
+      if (minDuration !== null && durationValue < minDuration) return false;
+      if (maxDuration !== null && durationValue > maxDuration) return false;
+
+      if (source) {
+        const aprValue = calculateApr(source);
+        if (minApr !== null && aprValue < minApr) return false;
+        if (maxApr !== null && aprValue > maxApr) return false;
+      }
+
+      return true;
+    });
+  }, [aprFilter, assetFilter, durationFilter, loanSources, scannedLoans, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLoans.length / pageSize));
+  const pagedLoans = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredLoans.slice(start, start + pageSize);
+  }, [filteredLoans, page, pageSize]);
+
   const reminders = useMemo(() => {
     if (currentBlock === 0) {
       return [];
@@ -351,17 +412,21 @@ export default function App() {
     }
 
     const cards: LoanSnapshot[] = [];
+    const sources: Record<number, Loan> = {};
     for (let id = scanRange.start; id <= scanRange.end; id += 1) {
       const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
       if (result && typeof result === "object" && "value" in result) {
         const loan = (result as { value: Loan }).value;
         cards.push(formatLoan(id, loan));
+        sources[id] = loan;
       }
     }
     setScannedLoans(cards);
+    setLoanSources(sources);
     setLogs((current) =>
       logLine(`Scanned loans ${scanRange.start} → ${scanRange.end}.`, current)
     );
+    setPage(1);
   };
 
   return (
@@ -874,9 +939,9 @@ export default function App() {
           <article className="panel wide">
             <div className="panel-header">
               <div>
-                <h2>Open Loans</h2>
+                <h2>Loan Explorer</h2>
                 <p className="subtitle small">
-                  Scan a range of loan IDs and list OPEN loans.
+                  Scan a range of loan IDs, then filter by asset, status, APR, or duration.
                 </p>
               </div>
               <div className="panel-grid compact">
@@ -913,20 +978,167 @@ export default function App() {
                 </button>
               </div>
             </div>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <label>
+                Status
+                <select
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="open">Open</option>
+                  <option value="funded">Funded</option>
+                  <option value="repaid">Repaid</option>
+                  <option value="defaulted">Defaulted</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label>
+                Asset
+                <select
+                  value={assetFilter}
+                  onChange={(event) => {
+                    setAssetFilter(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="principal-stx">Principal: STX</option>
+                  <option value="principal-sbtc">Principal: sBTC</option>
+                  <option value="collateral-stx">Collateral: STX</option>
+                  <option value="collateral-sbtc">Collateral: sBTC</option>
+                </select>
+              </label>
+              <label>
+                APR min/max (%)
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Min"
+                    value={aprFilter.min}
+                    onChange={(event) => {
+                      setAprFilter((current) => ({
+                        ...current,
+                        min: event.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Max"
+                    value={aprFilter.max}
+                    onChange={(event) => {
+                      setAprFilter((current) => ({
+                        ...current,
+                        max: event.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </label>
+              <label>
+                Duration min/max (blocks)
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Min"
+                    value={durationFilter.min}
+                    onChange={(event) => {
+                      setDurationFilter((current) => ({
+                        ...current,
+                        min: event.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Max"
+                    value={durationFilter.max}
+                    onChange={(event) => {
+                      setDurationFilter((current) => ({
+                        ...current,
+                        max: event.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </label>
+            </div>
             <div className="loan-list">
-              {openLoans.length ? (
-                openLoans.map((loan) => (
+              {pagedLoans.length ? (
+                pagedLoans.map((loan) => {
+                  const source = loanSources[loan.id];
+                  const aprValue = source ? calculateApr(source) : 0;
+                  return (
                   <div className="loan-card" key={loan.id}>
                     <strong>Loan #{loan.id}</strong>
+                    <span className="loan-tag">
+                      Status: {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
+                    </span>
                     <span className="loan-tag">Principal: {loan.principal}</span>
                     <span className="loan-tag">Collateral: {loan.collateral}</span>
                     <span className="loan-tag">Repay: {loan.repay}</span>
                     <span className="loan-tag">Duration: {loan.duration}</span>
+                    <span className="loan-tag">
+                      APR: {aprValue ? `${aprValue.toFixed(1)}%` : "—"}
+                    </span>
                   </div>
-                ))
+                  );
+                })
               ) : (
-                <p className="hint">No open loans yet.</p>
+                <p className="hint">No loans match the current filters.</p>
               )}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-neutral-500">
+                Showing {pagedLoans.length} of {filteredLoans.length}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm text-neutral-500">
+                  Page size
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(1);
+                    }}
+                  >
+                    <option value={4}>4</option>
+                    <option value={6}>6</option>
+                    <option value={9}>9</option>
+                  </select>
+                </label>
+                <button
+                  className="ghost"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
+                >
+                  Prev
+                </button>
+                <span className="text-sm text-neutral-500">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  className="ghost"
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  disabled={page === totalPages}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </article>
         </section>
