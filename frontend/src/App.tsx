@@ -398,6 +398,16 @@ export default function App() {
     [lenderLoans, currentBlock]
   );
 
+  const borrowerReputation = useMemo(() => {
+    const total = borrowerLoans.length;
+    const repaid = borrowerLoans.filter((loan) => loan.status === STATUS.REPAID).length;
+    const defaulted = borrowerLoans.filter((loan) => loan.status === STATUS.DEFAULTED).length;
+    const active = borrowerLoans.filter((loan) => loan.status === STATUS.FUNDED).length;
+    const settled = repaid + defaulted;
+    const repaymentRate = settled ? Math.round((repaid / settled) * 100) : 0;
+    return { total, repaid, defaulted, active, repaymentRate };
+  }, [borrowerLoans]);
+
   const statusBadgeClass = (status: bigint) => {
     switch (status) {
       case STATUS.OPEN:
@@ -1075,6 +1085,71 @@ export default function App() {
               </div>
             </TabsContent>
           </Tabs>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Borrower Reputation</CardTitle>
+              <CardDescription>
+                Snapshot of on-chain repayment history for the connected borrower.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div>
+                  <p className="text-sm text-neutral-500">Total loans</p>
+                  <p className="text-2xl font-semibold">{borrowerReputation.total}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Repaid</p>
+                  <p className="text-2xl font-semibold">{borrowerReputation.repaid}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Defaulted</p>
+                  <p className="text-2xl font-semibold">{borrowerReputation.defaulted}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Active</p>
+                  <p className="text-2xl font-semibold">{borrowerReputation.active}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                  Repayment rate {borrowerReputation.repaymentRate}%
+                </Badge>
+                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  {address ? "Wallet-linked" : "Connect wallet for borrower filtering"}
+                </Badge>
+                <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                  Based on scanned loans
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Reputation Notes</CardTitle>
+              <CardDescription>Quick context for lenders.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm text-neutral-600">
+                <div className="flex items-center justify-between">
+                  <span>Settled loans</span>
+                  <span className="font-semibold">
+                    {borrowerReputation.repaid + borrowerReputation.defaulted}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Open exposure</span>
+                  <span className="font-semibold">{borrowerReputation.active}</span>
+                </div>
+                <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2 text-xs text-neutral-500">
+                  Hook up event indexing for timestamps and richer risk signals.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
