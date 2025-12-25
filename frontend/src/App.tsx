@@ -41,6 +41,17 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const BLOCKS_PER_YEAR = 52560;
+const APR_PRESETS = [
+  { label: "6% APR", value: 6 },
+  { label: "10% APR", value: 10 },
+  { label: "15% APR", value: 15 },
+  { label: "25% APR", value: 25 },
+];
+const COLLATERAL_PRESETS = [
+  { label: "120% collateral", value: 1.2 },
+  { label: "150% collateral", value: 1.5 },
+  { label: "200% collateral", value: 2 },
+];
 
 type LoanSnapshot = {
   id: number;
@@ -84,6 +95,17 @@ const calculateApr = (loanSource: Loan) => {
   if (!principal || duration <= 0 || repay <= principal) return 0;
   const interest = (repay - principal) / principal;
   return (interest * (BLOCKS_PER_YEAR / duration)) * 100;
+};
+
+const calcRepayFromApr = (principal: number, apr: number, duration: number) => {
+  if (!principal || !apr || !duration) return principal;
+  const interest = (apr / 100) * (duration / BLOCKS_PER_YEAR);
+  return Math.max(0, Math.round(principal * (1 + interest)));
+};
+
+const calcCollateralFromRatio = (principal: number, ratio: number) => {
+  if (!principal || !ratio) return principal;
+  return Math.max(0, Math.round(principal * ratio));
 };
 
 const callContract = async (
@@ -140,6 +162,9 @@ export default function App() {
     principalIsStx: false,
     collateralIsStx: true,
   });
+  const [aprPreset, setAprPreset] = useState(APR_PRESETS[1].value);
+  const [collateralPreset, setCollateralPreset] = useState(COLLATERAL_PRESETS[1].value);
+  const [autoApplyPresets, setAutoApplyPresets] = useState(true);
   const [manageLoanId, setManageLoanId] = useState(1);
   const [scanRange, setScanRange] = useState({ start: 1, end: 5 });
   const [scannedLoans, setScannedLoans] = useState<LoanSnapshot[]>([]);
@@ -396,6 +421,14 @@ export default function App() {
     }
     await callCreate(config, createForm);
     setLogs((current) => logLine("Create-loan submitted.", current));
+  };
+
+  const applyPresets = (principal = createForm.principalAmount, duration = createForm.duration) => {
+    setCreateForm((current) => ({
+      ...current,
+      repayAmount: calcRepayFromApr(principal, aprPreset, duration),
+      collateralAmount: calcCollateralFromRatio(principal, collateralPreset),
+    }));
   };
 
   const handleAction = async (action: string) => {
@@ -803,10 +836,21 @@ export default function App() {
                   min={1}
                   value={createForm.duration}
                   onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      duration: Number(event.target.value),
-                    }))
+                    setCreateForm((current) => {
+                      const duration = Number(event.target.value);
+                      if (!autoApplyPresets) {
+                        return { ...current, duration };
+                      }
+                      return {
+                        ...current,
+                        duration,
+                        repayAmount: calcRepayFromApr(
+                          current.principalAmount,
+                          aprPreset,
+                          duration
+                        ),
+                      };
+                    })
                   }
                 />
               </label>
@@ -831,10 +875,25 @@ export default function App() {
                   min={1}
                   value={createForm.principalAmount}
                   onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      principalAmount: Number(event.target.value),
-                    }))
+                    setCreateForm((current) => {
+                      const principalAmount = Number(event.target.value);
+                      if (!autoApplyPresets) {
+                        return { ...current, principalAmount };
+                      }
+                      return {
+                        ...current,
+                        principalAmount,
+                        repayAmount: calcRepayFromApr(
+                          principalAmount,
+                          aprPreset,
+                          current.duration
+                        ),
+                        collateralAmount: calcCollateralFromRatio(
+                          principalAmount,
+                          collateralPreset
+                        ),
+                      };
+                    })
                   }
                 />
               </label>
@@ -851,6 +910,79 @@ export default function App() {
                     }))
                   }
                 />
+              </label>
+            </div>
+            <div className="panel-grid">
+              <label>
+                APR preset
+                <select
+                  value={aprPreset}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setAprPreset(next);
+                    if (autoApplyPresets) {
+                      setCreateForm((current) => ({
+                        ...current,
+                        repayAmount: calcRepayFromApr(
+                          current.principalAmount,
+                          next,
+                          current.duration
+                        ),
+                      }));
+                    }
+                  }}
+                >
+                  {APR_PRESETS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Collateral ratio preset
+                <select
+                  value={collateralPreset}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setCollateralPreset(next);
+                    if (autoApplyPresets) {
+                      setCreateForm((current) => ({
+                        ...current,
+                        collateralAmount: calcCollateralFromRatio(
+                          current.principalAmount,
+                          next
+                        ),
+                      }));
+                    }
+                  }}
+                >
+                  {COLLATERAL_PRESETS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Auto-apply presets
+                <select
+                  value={autoApplyPresets ? "on" : "off"}
+                  onChange={(event) => setAutoApplyPresets(event.target.value === "on")}
+                >
+                  <option value="on">On</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label>
+                Apply presets
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => applyPresets()}
+                >
+                  Apply to amounts
+                </button>
               </label>
             </div>
             <div className="toggle-group">
