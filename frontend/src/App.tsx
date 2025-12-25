@@ -248,6 +248,9 @@ export default function App() {
   const [lastActionAt, setLastActionAt] = useState(0);
   const [cooldownMs, setCooldownMs] = useState(2000);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [showDiagnostics, setShowDiagnostics] = useState(import.meta.env.DEV);
+  const [diagLoanId, setDiagLoanId] = useState(1);
+  const [diagResult, setDiagResult] = useState<string>("");
 
   const defaultToken = useMemo(
     () => tokens.find((token) => token.id === defaultTokenId) ?? tokens[0],
@@ -832,6 +835,22 @@ export default function App() {
     await fetchLoansByIds(indexedLoanIds, "Refreshed indexed loans.");
   };
 
+  const handleDiagnosticsRead = async () => {
+    if (!canRead) {
+      pushToast("Missing config", "Set API URL, contract, and read-only sender.", "error");
+      return;
+    }
+    try {
+      const result = await callReadOnly(config, "get-loan", [uintCV(diagLoanId)]);
+      setDiagResult(JSON.stringify(result, null, 2));
+      pushToast("Diagnostics", `Read-only loan ${diagLoanId} loaded.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setDiagResult(`Error: ${message}`);
+      pushToast("Diagnostics error", message, "error");
+    }
+  };
+
   return (
     <div className="page">
       <div className="glow" />
@@ -1275,6 +1294,91 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+
+        {import.meta.env.DEV ? (
+          <section className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Diagnostics Panel</CardTitle>
+                <CardDescription>
+                  Developer-only tools for contract calls and event debugging.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="text-sm text-neutral-500">
+                    Enable diagnostics
+                    <select
+                      value={showDiagnostics ? "on" : "off"}
+                      onChange={(event) => setShowDiagnostics(event.target.value === "on")}
+                    >
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                  <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                    API {config.apiUrl || "Not set"}
+                  </Badge>
+                  <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                    Contract {config.address || "Not set"}
+                  </Badge>
+                </div>
+                {showDiagnostics ? (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-3">
+                      <label>
+                        Read-only: get-loan ID
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            value={diagLoanId}
+                            onChange={(event) => setDiagLoanId(Number(event.target.value))}
+                          />
+                          <button className="ghost" type="button" onClick={handleDiagnosticsRead}>
+                            Run
+                          </button>
+                        </div>
+                      </label>
+                      <div className="space-y-2 text-sm text-neutral-500">
+                        <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                          Read-only sender: {config.readOnlySender || "Not set"}
+                        </div>
+                        <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                          Contract name: {config.name}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-neutral-500">Last result</p>
+                      <pre className="log">{diagResult || "No diagnostics run yet."}</pre>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-neutral-500">
+                    Diagnostics are disabled. Toggle on to run read-only calls.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Diagnostics Notes</CardTitle>
+                <CardDescription>Useful for dev-only testing.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm text-neutral-600">
+                  <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                    Track errors via the activity log and toast stack.
+                  </div>
+                  <div className="rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                    Extend with event indexing once a backend indexer is live.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
 
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
