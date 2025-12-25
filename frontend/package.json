@@ -13,6 +13,7 @@
     "@stacks/connect": "^8.0.0",
     "@stacks/network": "^6.9.0",
     "@stacks/transactions": "^7.2.0",
+    "@walletconnect/universal-provider": "^2.16.0",
     "clsx": "^2.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -29,3 +30,4 @@
     "vite": "^5.4.6"
   }
 }
+

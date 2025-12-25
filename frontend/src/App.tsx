@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import { openContractCall } from "@stacks/connect";
 import { AppConfig, UserSession } from "@stacks/connect";
 import { StacksMainnet, StacksTestnet } from "@stacks/network";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { useWallet } from "./wallet";
 import {
   callReadOnly,
   createLoanArgs,
@@ -182,8 +182,7 @@ const callCreate = async (config: ContractConfig, data: Parameters<typeof create
 };
 
 export default function App() {
-  const { open } = useAppKit();
-  const { address, isConnected } = useAppKitAccount();
+  const { address, isConnected, connect, isConnecting, chainId } = useWallet();
   const [config, setConfig] = useState(defaultConfig);
   const [currentBlock, setCurrentBlock] = useState(0);
   const [reminderWindow, setReminderWindow] = useState(50);
@@ -519,7 +518,10 @@ export default function App() {
   };
 
   const handleConnect = () => {
-    open();
+    const targetChain = config.apiUrl.includes("mainnet")
+      ? "stacks:mainnet"
+      : "stacks:testnet";
+    connect(targetChain);
   };
 
   const handleCreate = async () => {
@@ -783,9 +785,16 @@ export default function App() {
                 onChange={(event) => setCurrentBlock(Number(event.target.value))}
               />
             </div>
-            <button className="primary" onClick={handleConnect}>
-              {isConnected ? `Connected: ${address}` : "Connect Wallet"}
+            <button className="primary" onClick={handleConnect} disabled={isConnecting}>
+              {isConnected
+                ? `Connected: ${address}`
+                : isConnecting
+                ? "Connecting..."
+                : "Connect Wallet"}
             </button>
+            {chainId ? (
+              <p className="hint">WalletConnect chain: {chainId}</p>
+            ) : null}
           </div>
         </header>
 
