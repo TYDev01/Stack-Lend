@@ -93,6 +93,8 @@ type ToastItem = {
   tone: "info" | "success" | "error";
 };
 
+type CsvRow = Record<string, string | number>;
+
 const formatLoan = (
   loanId: number,
   loan: Loan,
@@ -150,6 +152,35 @@ const loadIndexedLoanIds = () => {
   } catch {
     return [];
   }
+};
+
+const toCsv = (rows: CsvRow[]) => {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(",")];
+  rows.forEach((row) => {
+    lines.push(
+      headers
+        .map((key) => {
+          const raw = row[key] ?? "";
+          const escaped = String(raw).replace(/"/g, '""');
+          return `"${escaped}"`;
+        })
+        .join(",")
+    );
+  });
+  return lines.join("\n");
+};
+
+const downloadCsv = (filename: string, rows: CsvRow[]) => {
+  const csv = toCsv(rows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 const callContract = async (
@@ -849,6 +880,80 @@ export default function App() {
       setDiagResult(`Error: ${message}`);
       pushToast("Diagnostics error", message, "error");
     }
+  };
+
+  const handleExportLoans = () => {
+    if (!filteredLoans.length) {
+      pushToast("Export", "No loans to export.", "info");
+      return;
+    }
+    const rows: CsvRow[] = filteredLoans.map((loan) => {
+      const source = loanSources[loan.id];
+      return {
+        id: loan.id,
+        status: STATUS_LABELS[loan.status.toString()] ?? "Unknown",
+        borrower: loan.borrower,
+        lender: loan.lender ?? "",
+        principal: loan.principal,
+        collateral: loan.collateral,
+        repay: loan.repay,
+        duration: loan.duration,
+        endBlock: loan.endBlock,
+        apr: source ? calculateApr(source).toFixed(2) : "",
+      };
+    });
+    downloadCsv("loans-export.csv", rows);
+    pushToast("Export", "Loan list CSV downloaded.", "success");
+  };
+
+  const handleExportRepaymentHistory = () => {
+    if (!selectedLoan) {
+      pushToast("Export", "Select a loan to export history.", "info");
+      return;
+    }
+    const status = selectedLoan.status;
+    const rows: CsvRow[] = [
+      {
+        loanId: selectedLoan.id,
+        event: "Created",
+        status: STATUS_LABELS[STATUS.OPEN.toString()],
+        note: "Loan created",
+      },
+    ];
+    if (status >= STATUS.FUNDED) {
+      rows.push({
+        loanId: selectedLoan.id,
+        event: "Funded",
+        status: STATUS_LABELS[STATUS.FUNDED.toString()],
+        note: "Principal released",
+      });
+    }
+    if (status === STATUS.REPAID) {
+      rows.push({
+        loanId: selectedLoan.id,
+        event: "Repaid",
+        status: STATUS_LABELS[STATUS.REPAID.toString()],
+        note: "Loan repaid",
+      });
+    }
+    if (status === STATUS.DEFAULTED) {
+      rows.push({
+        loanId: selectedLoan.id,
+        event: "Defaulted",
+        status: STATUS_LABELS[STATUS.DEFAULTED.toString()],
+        note: "Collateral claimed",
+      });
+    }
+    if (status === STATUS.CANCELLED) {
+      rows.push({
+        loanId: selectedLoan.id,
+        event: "Cancelled",
+        status: STATUS_LABELS[STATUS.CANCELLED.toString()],
+        note: "Loan cancelled",
+      });
+    }
+    downloadCsv(`loan-${selectedLoan.id}-history.csv`, rows);
+    pushToast("Export", "Repayment history CSV downloaded.", "success");
   };
 
   return (
@@ -2468,11 +2573,11 @@ export default function App() {
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
                           Transaction History
                         </h3>
-                        <div className="space-y-2 text-sm text-neutral-600">
-                          <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
-                            <span>Created</span>
-                            <span className="text-neutral-500">On-chain</span>
-                          </div>
+                    <div className="space-y-2 text-sm text-neutral-600">
+                      <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
+                        <span>Created</span>
+                        <span className="text-neutral-500">On-chain</span>
+                      </div>
                           <div className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2">
                             <span>Funded</span>
                             <span className="text-neutral-500">
@@ -2489,6 +2594,9 @@ export default function App() {
                         <p className="text-xs text-neutral-500">
                           Hook up an indexer later for detailed timestamps.
                         </p>
+                        <button className="ghost" onClick={handleExportRepaymentHistory}>
+                          Export repayment history CSV
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -2504,6 +2612,9 @@ export default function App() {
                 Showing {pagedLoans.length} of {filteredLoans.length}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button className="ghost" onClick={handleExportLoans}>
+                  Export loan list CSV
+                </button>
                 <label className="text-sm text-neutral-500">
                   Page size
                   <select
