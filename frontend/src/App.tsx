@@ -369,6 +369,11 @@ export default function App() {
 
   const t = (key: string) => I18N[language][key] ?? I18N.en[key] ?? key;
 
+  const expectedChainId = config.apiUrl.includes("mainnet")
+    ? "stacks:mainnet"
+    : "stacks:testnet";
+  const hasChainMismatch = Boolean(chainId && chainId !== expectedChainId);
+
   const pushToast = (title: string, message: string, tone: ToastItem["tone"]) => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     setToasts((current) => [...current, { id, title, message, tone }]);
@@ -678,10 +683,7 @@ export default function App() {
   };
 
   const handleConnect = () => {
-    const targetChain = config.apiUrl.includes("mainnet")
-      ? "stacks:mainnet"
-      : "stacks:testnet";
-    connect(targetChain);
+    connect(expectedChainId);
   };
 
   const handleCreate = async () => {
@@ -1092,6 +1094,17 @@ export default function App() {
             </button>
             {chainId ? (
               <p className="hint">WalletConnect chain: {chainId}</p>
+            ) : null}
+            {hasChainMismatch ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="mb-2 font-semibold">Network mismatch</p>
+                <p className="mb-2 text-xs">
+                  Connected to {chainId}, but this app expects {expectedChainId}.
+                </p>
+                <button className="ghost" onClick={handleConnect} disabled={isConnecting}>
+                  Switch to {expectedChainId}
+                </button>
+              </div>
             ) : null}
             <div className="row">
               <label className="label">{t("language")}</label>
