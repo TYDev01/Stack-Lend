@@ -209,6 +209,12 @@ export default function App() {
   const [indexerInput, setIndexerInput] = useState("");
   const [indexerImport, setIndexerImport] = useState("");
   const [indexerAddScan, setIndexerAddScan] = useState(true);
+  const [calcInput, setCalcInput] = useState({
+    principal: 1000,
+    repay: 1100,
+    duration: 144,
+    blocksPerYear: BLOCKS_PER_YEAR,
+  });
   const [createForm, setCreateForm] = useState({
     loanId: 1,
     duration: 144,
@@ -283,6 +289,38 @@ export default function App() {
   }, [scanRange]);
 
   const isCooldownActive = Date.now() - lastActionAt < cooldownMs;
+
+  const repaymentSummary = useMemo(() => {
+    const principal = calcInput.principal;
+    const repay = calcInput.repay;
+    const duration = calcInput.duration;
+    const blocksPerYear = calcInput.blocksPerYear || BLOCKS_PER_YEAR;
+    if (!principal || !repay || !duration) {
+      return null;
+    }
+    const interest = Math.max(0, repay - principal);
+    const interestRate = interest / principal;
+    const apr = (interestRate * (blocksPerYear / duration)) * 100;
+    const perBlock = interest / duration;
+    const checkpoints = [0.25, 0.5, 0.75, 1].map((ratio) => {
+      const block = Math.round(duration * ratio);
+      const accrued = Math.round(perBlock * block);
+      return {
+        label: `${Math.round(ratio * 100)}%`,
+        block,
+        accrued,
+        totalDue: principal + accrued,
+      };
+    });
+
+    return {
+      interest,
+      apr,
+      perBlock,
+      totalDue: repay,
+      checkpoints,
+    };
+  }, [calcInput]);
 
   useEffect(() => {
     localStorage.setItem(LOAN_INDEX_STORAGE_KEY, JSON.stringify(indexedLoanIds));
@@ -1270,6 +1308,152 @@ export default function App() {
                   </p>
                 </label>
               </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Repayment Schedule Calculator</CardTitle>
+              <CardDescription>
+                Estimate total cost, APR, and interim checkpoints for a loan term.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label>
+                  Principal amount
+                  <input
+                    type="number"
+                    min={0}
+                    value={calcInput.principal}
+                    onChange={(event) =>
+                      setCalcInput((current) => ({
+                        ...current,
+                        principal: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Repay amount
+                  <input
+                    type="number"
+                    min={0}
+                    value={calcInput.repay}
+                    onChange={(event) =>
+                      setCalcInput((current) => ({
+                        ...current,
+                        repay: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Duration (blocks)
+                  <input
+                    type="number"
+                    min={1}
+                    value={calcInput.duration}
+                    onChange={(event) =>
+                      setCalcInput((current) => ({
+                        ...current,
+                        duration: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Blocks per year
+                  <input
+                    type="number"
+                    min={1}
+                    value={calcInput.blocksPerYear}
+                    onChange={(event) =>
+                      setCalcInput((current) => ({
+                        ...current,
+                        blocksPerYear: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              {repaymentSummary ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Total Cost</CardTitle>
+                      <CardDescription>Principal + interest.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold">
+                        {repaymentSummary.totalDue}
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        Interest: {repaymentSummary.interest}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>APR Estimate</CardTitle>
+                      <CardDescription>Based on duration + blocks/year.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold">
+                        {repaymentSummary.apr.toFixed(2)}%
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        Per-block interest: {repaymentSummary.perBlock.toFixed(2)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Duration</CardTitle>
+                      <CardDescription>Block-based term length.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold">
+                        {calcInput.duration} blocks
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        Blocks/year: {calcInput.blocksPerYear}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-neutral-500">
+                  Enter principal, repay, and duration to see a breakdown.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Checkpoint Schedule</CardTitle>
+              <CardDescription>Accrued totals at common milestones.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {repaymentSummary ? (
+                <div className="space-y-3 text-sm">
+                  {repaymentSummary.checkpoints.map((point) => (
+                    <div
+                      key={point.label}
+                      className="flex items-center justify-between rounded-lg border border-neutral-200/70 bg-white/90 px-3 py-2"
+                    >
+                      <span>{point.label} • block {point.block}</span>
+                      <span className="font-semibold">{point.totalDue}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">
+                  Schedule appears once inputs are valid.
+                </p>
+              )}
             </CardContent>
           </Card>
         </section>
