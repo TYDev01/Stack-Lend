@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import { openContractCall } from "@stacks/connect";
 import { AppConfig, UserSession } from "@stacks/connect";
@@ -52,6 +52,7 @@ const COLLATERAL_PRESETS = [
   { label: "150% collateral", value: 1.5 },
   { label: "200% collateral", value: 2 },
 ];
+const LOAN_INDEX_STORAGE_KEY = "stacks-lend:indexed-loans";
 
 type TokenMeta = {
   id: string;
@@ -132,6 +133,18 @@ const calcCollateralFromRatio = (principal: number, ratio: number) => {
   return Math.max(0, Math.round(principal * ratio));
 };
 
+const loadIndexedLoanIds = () => {
+  try {
+    const stored = localStorage.getItem(LOAN_INDEX_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id) => typeof id === "number" && id > 0);
+  } catch {
+    return [];
+  }
+};
+
 const callContract = async (
   config: ContractConfig,
   functionName: string,
@@ -191,6 +204,12 @@ export default function App() {
     contract: "",
     decimals: 8,
   });
+  const [indexedLoanIds, setIndexedLoanIds] = useState<number[]>(() =>
+    loadIndexedLoanIds()
+  );
+  const [indexerInput, setIndexerInput] = useState("");
+  const [indexerImport, setIndexerImport] = useState("");
+  const [indexerAddScan, setIndexerAddScan] = useState(true);
   const [createForm, setCreateForm] = useState({
     loanId: 1,
     duration: 144,
@@ -229,6 +248,10 @@ export default function App() {
     () => tokens.find((token) => token.id === selectedCollateralTokenId) ?? defaultToken,
     [defaultToken, selectedCollateralTokenId, tokens]
   );
+
+  useEffect(() => {
+    localStorage.setItem(LOAN_INDEX_STORAGE_KEY, JSON.stringify(indexedLoanIds));
+  }, [indexedLoanIds]);
 
   const canRead = useMemo(
     () =>
@@ -527,6 +550,75 @@ export default function App() {
     });
   };
 
+  const handleAddIndexedLoan = () => {
+    const value = Number(indexerInput);
+    if (!value || value <= 0) {
+      setLogs((current) => logLine("Enter a valid loan ID.", current));
+      return;
+    }
+    setIndexedLoanIds((current) => {
+      const next = Array.from(new Set([...current, value])).sort((a, b) => a - b);
+      return next;
+    });
+    setIndexerInput("");
+  };
+
+  const handleImportIndexedLoans = () => {
+    if (!indexerImport.trim()) return;
+    const ids = indexerImport
+      .split(/[\s,]+/)
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (!ids.length) {
+      setLogs((current) => logLine("No valid IDs found in import.", current));
+      return;
+    }
+    setIndexedLoanIds((current) => {
+      const next = Array.from(new Set([...current, ...ids])).sort((a, b) => a - b);
+      return next;
+    });
+    setIndexerImport("");
+  };
+
+  const fetchLoansByIds = async (ids: number[], label: string) => {
+    if (!canRead) {
+      setLogs((current) =>
+        logLine("Provide API URL, contract, and read-only sender.", current)
+      );
+      return;
+    }
+
+    if (!ids.length) {
+      setLogs((current) => logLine("No loan IDs to fetch.", current));
+      return;
+    }
+
+    const cards: LoanSnapshot[] = [];
+    const sources: Record<number, Loan> = {};
+    for (const id of ids) {
+      const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
+      if (result && typeof result === "object" && "value" in result) {
+        const loan = (result as { value: Loan }).value;
+        cards.push(formatLoan(id, loan, defaultToken?.symbol ?? "SIP-010"));
+        sources[id] = loan;
+      }
+    }
+    setScannedLoans(cards);
+    setLoanSources(sources);
+    setLogs((current) => logLine(label, current));
+    setPage(1);
+    setSelectedLoanId((current) => {
+      if (current === null) {
+        const next = cards[0]?.id ?? null;
+        if (next !== null) setManageLoanId(next);
+        return next;
+      }
+      const next = cards.some((loan) => loan.id === current) ? current : cards[0]?.id ?? null;
+      if (next !== null) setManageLoanId(next);
+      return next;
+    });
+  };
+
   const handleAction = async (action: string) => {
     if (!config.address) {
       setLogs((current) =>
@@ -539,39 +631,24 @@ export default function App() {
   };
 
   const handleScan = async () => {
-    if (!canRead) {
-      setLogs((current) =>
-        logLine("Provide API URL, contract, and read-only sender.", current)
-      );
-      return;
-    }
-
-    const cards: LoanSnapshot[] = [];
-    const sources: Record<number, Loan> = {};
+    const ids: number[] = [];
     for (let id = scanRange.start; id <= scanRange.end; id += 1) {
-      const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
-      if (result && typeof result === "object" && "value" in result) {
-        const loan = (result as { value: Loan }).value;
-        cards.push(formatLoan(id, loan, defaultToken?.symbol ?? "SIP-010"));
-        sources[id] = loan;
-      }
+      ids.push(id);
     }
-    setScannedLoans(cards);
-    setLoanSources(sources);
-    setLogs((current) =>
-      logLine(`Scanned loans ${scanRange.start} → ${scanRange.end}.`, current)
+    await fetchLoansByIds(
+      ids,
+      `Scanned loans ${scanRange.start} → ${scanRange.end}.`
     );
-    setPage(1);
-    setSelectedLoanId((current) => {
-      if (current === null) {
-        const next = cards[0]?.id ?? null;
-        if (next !== null) setManageLoanId(next);
+    if (indexerAddScan && ids.length) {
+      setIndexedLoanIds((current) => {
+        const next = Array.from(new Set([...current, ...ids])).sort((a, b) => a - b);
         return next;
-      }
-      const next = cards.some((loan) => loan.id === current) ? current : cards[0]?.id ?? null;
-      if (next !== null) setManageLoanId(next);
-      return next;
-    });
+      });
+    }
+  };
+
+  const handleIndexRefresh = async () => {
+    await fetchLoansByIds(indexedLoanIds, "Refreshed indexed loans.");
   };
 
   return (
@@ -1030,6 +1107,106 @@ export default function App() {
           </Card>
         </section>
 
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Loan Indexer</CardTitle>
+              <CardDescription>
+                Keep a local index of loan IDs and refresh them without range scans.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge className="border-neutral-200 bg-white">
+                  Indexed loans {indexedLoanIds.length}
+                </Badge>
+                <button className="primary" onClick={handleIndexRefresh}>
+                  Refresh indexed loans
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => setIndexedLoanIds([])}
+                  disabled={!indexedLoanIds.length}
+                >
+                  Clear index
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {indexedLoanIds.length ? (
+                  <div className="flex flex-wrap gap-2 text-xs text-neutral-600">
+                    {indexedLoanIds.map((id) => (
+                      <Badge key={id} className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                        #{id}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">
+                    Add loan IDs to build the index, or scan a range and save them.
+                  </p>
+                )}
+              </div>
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                <label>
+                  Add loan ID
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={indexerInput}
+                      onChange={(event) => setIndexerInput(event.target.value)}
+                    />
+                    <button className="ghost" type="button" onClick={handleAddIndexedLoan}>
+                      Add
+                    </button>
+                  </div>
+                </label>
+                <label>
+                  Import IDs (comma or space separated)
+                  <div className="flex gap-2">
+                    <input
+                      value={indexerImport}
+                      onChange={(event) => setIndexerImport(event.target.value)}
+                      placeholder="1, 2, 3"
+                    />
+                    <button className="ghost" type="button" onClick={handleImportIndexedLoans}>
+                      Import
+                    </button>
+                  </div>
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Indexer Options</CardTitle>
+              <CardDescription>Control how scans update the index.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <label>
+                  Add scanned IDs to indexer
+                  <select
+                    value={indexerAddScan ? "yes" : "no"}
+                    onChange={(event) => setIndexerAddScan(event.target.value === "yes")}
+                  >
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </label>
+                <label>
+                  Indexed loans
+                  <p className="text-sm text-neutral-500">
+                    {indexedLoanIds.length
+                      ? `Next refresh will fetch ${indexedLoanIds.length} IDs.`
+                      : "No indexed loans yet."}
+                  </p>
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         <section className="grid">
           <article className="panel">
             <h2>Create Loan</h2>
@@ -1390,6 +1567,14 @@ export default function App() {
                   Scan
                 </button>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="hint">
+                Use the Loan Indexer to refresh known IDs without scanning ranges.
+              </p>
+              <button className="ghost" onClick={handleIndexRefresh}>
+                Refresh indexed loans
+              </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <label>
