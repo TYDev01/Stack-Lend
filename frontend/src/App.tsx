@@ -53,6 +53,24 @@ const COLLATERAL_PRESETS = [
   { label: "200% collateral", value: 2 },
 ];
 
+type TokenMeta = {
+  id: string;
+  symbol: string;
+  name: string;
+  contract: string;
+  decimals: number;
+};
+
+const DEFAULT_TOKENS: TokenMeta[] = [
+  {
+    id: "sbtc",
+    symbol: "sBTC",
+    name: "sBTC",
+    contract: "SP000000000000000000002Q6VF78.sbtc-token",
+    decimals: 8,
+  },
+];
+
 type LoanSnapshot = {
   id: number;
   principal: string;
@@ -63,18 +81,26 @@ type LoanSnapshot = {
   borrower: string;
   lender?: string | null;
   endBlock: number;
+  principalIsStx: boolean;
+  collateralIsStx: boolean;
 };
 
-const formatLoan = (loanId: number, loan: Loan): LoanSnapshot => ({
+const formatLoan = (
+  loanId: number,
+  loan: Loan,
+  tokenLabel: string
+): LoanSnapshot => ({
   id: loanId,
-  principal: `${loan.principal_is_stx ? "STX" : "sBTC"} ${loan.principal_amount}`,
-  collateral: `${loan.collateral_is_stx ? "STX" : "sBTC"} ${loan.collateral_amount}`,
+  principal: `${loan.principal_is_stx ? "STX" : tokenLabel} ${loan.principal_amount}`,
+  collateral: `${loan.collateral_is_stx ? "STX" : tokenLabel} ${loan.collateral_amount}`,
   repay: `${loan.repay_amount}`,
   duration: `${loan.end_block}`,
   status: loan.status,
   borrower: loan.borrower,
   lender: loan.lender ?? null,
   endBlock: Number(loan.end_block),
+  principalIsStx: loan.principal_is_stx,
+  collateralIsStx: loan.collateral_is_stx,
 });
 
 const formatAddress = (value?: string | null) => {
@@ -83,8 +109,6 @@ const formatAddress = (value?: string | null) => {
 };
 
 const normalizeAddress = (value?: string | null) => value?.toLowerCase() ?? "";
-
-const parseAsset = (value: string) => (value.includes("STX") ? "stx" : "sbtc");
 
 const calculateApr = (loanSource: Loan) => {
   const principal = Number(loanSource.principal_amount);
@@ -153,6 +177,20 @@ export default function App() {
   const [logs, setLogs] = useState<string[]>([
     `${new Date().toLocaleTimeString()} Ready. Connect a wallet to get started.`,
   ]);
+  const [tokens, setTokens] = useState<TokenMeta[]>(DEFAULT_TOKENS);
+  const [defaultTokenId, setDefaultTokenId] = useState(DEFAULT_TOKENS[0]?.id ?? "");
+  const [selectedPrincipalTokenId, setSelectedPrincipalTokenId] = useState(
+    DEFAULT_TOKENS[0]?.id ?? ""
+  );
+  const [selectedCollateralTokenId, setSelectedCollateralTokenId] = useState(
+    DEFAULT_TOKENS[0]?.id ?? ""
+  );
+  const [tokenDraft, setTokenDraft] = useState({
+    symbol: "",
+    name: "",
+    contract: "",
+    decimals: 8,
+  });
   const [createForm, setCreateForm] = useState({
     loanId: 1,
     duration: 144,
@@ -176,6 +214,21 @@ export default function App() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
+
+  const defaultToken = useMemo(
+    () => tokens.find((token) => token.id === defaultTokenId) ?? tokens[0],
+    [defaultTokenId, tokens]
+  );
+
+  const selectedPrincipalToken = useMemo(
+    () => tokens.find((token) => token.id === selectedPrincipalTokenId) ?? defaultToken,
+    [defaultToken, selectedPrincipalTokenId, tokens]
+  );
+
+  const selectedCollateralToken = useMemo(
+    () => tokens.find((token) => token.id === selectedCollateralTokenId) ?? defaultToken,
+    [defaultToken, selectedCollateralTokenId, tokens]
+  );
 
   const canRead = useMemo(
     () =>
@@ -304,12 +357,10 @@ export default function App() {
       }
 
       if (assetFilter !== "all") {
-        const principalAsset = parseAsset(loan.principal);
-        const collateralAsset = parseAsset(loan.collateral);
-        if (assetFilter === "principal-stx" && principalAsset !== "stx") return false;
-        if (assetFilter === "principal-sbtc" && principalAsset !== "sbtc") return false;
-        if (assetFilter === "collateral-stx" && collateralAsset !== "stx") return false;
-        if (assetFilter === "collateral-sbtc" && collateralAsset !== "sbtc") return false;
+        if (assetFilter === "principal-stx" && !loan.principalIsStx) return false;
+        if (assetFilter === "principal-token" && loan.principalIsStx) return false;
+        if (assetFilter === "collateral-stx" && !loan.collateralIsStx) return false;
+        if (assetFilter === "collateral-token" && loan.collateralIsStx) return false;
       }
 
       const source = loanSources[loan.id];
@@ -431,6 +482,51 @@ export default function App() {
     }));
   };
 
+  const handleAddToken = () => {
+    const symbol = tokenDraft.symbol.trim();
+    const name = tokenDraft.name.trim();
+    const contract = tokenDraft.contract.trim();
+    if (!symbol || !contract) {
+      setLogs((current) => logLine("Token requires a symbol and contract.", current));
+      return;
+    }
+    const id = symbol.toLowerCase();
+    const entry: TokenMeta = {
+      id,
+      symbol,
+      name: name || symbol,
+      contract,
+      decimals: Number(tokenDraft.decimals) || 8,
+    };
+    setTokens((current) => {
+      const without = current.filter((token) => token.id !== id);
+      return [...without, entry];
+    });
+    setTokenDraft({ symbol: "", name: "", contract: "", decimals: 8 });
+    if (!defaultTokenId) {
+      setDefaultTokenId(id);
+    }
+    setSelectedPrincipalTokenId(id);
+    setSelectedCollateralTokenId(id);
+  };
+
+  const handleRemoveToken = (tokenId: string) => {
+    setTokens((current) => {
+      const nextTokens = current.filter((token) => token.id !== tokenId);
+      const fallback = nextTokens[0]?.id ?? "";
+      setDefaultTokenId((currentDefault) =>
+        currentDefault === tokenId ? fallback : currentDefault
+      );
+      setSelectedPrincipalTokenId((currentSelected) =>
+        currentSelected === tokenId ? fallback : currentSelected
+      );
+      setSelectedCollateralTokenId((currentSelected) =>
+        currentSelected === tokenId ? fallback : currentSelected
+      );
+      return nextTokens;
+    });
+  };
+
   const handleAction = async (action: string) => {
     if (!config.address) {
       setLogs((current) =>
@@ -456,7 +552,7 @@ export default function App() {
       const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
       if (result && typeof result === "object" && "value" in result) {
         const loan = (result as { value: Loan }).value;
-        cards.push(formatLoan(id, loan));
+        cards.push(formatLoan(id, loan, defaultToken?.symbol ?? "SIP-010"));
         sources[id] = loan;
       }
     }
@@ -811,6 +907,129 @@ export default function App() {
           </Card>
         </section>
 
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>SIP-010 Token Registry</CardTitle>
+              <CardDescription>
+                Manage supported tokens for loan creation and display labels.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {tokens.length ? (
+                  tokens.map((token) => (
+                    <div
+                      key={token.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{token.symbol}</span>
+                          <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                            {token.name}
+                          </Badge>
+                          {token.id === defaultTokenId ? (
+                            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                              Default
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-neutral-500">
+                          {token.contract}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="ghost"
+                          onClick={() => setDefaultTokenId(token.id)}
+                          disabled={token.id === defaultTokenId}
+                        >
+                          Set default
+                        </button>
+                        <button
+                          className="ghost"
+                          onClick={() => handleRemoveToken(token.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-neutral-500">
+                    No tokens configured yet.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Add Token</CardTitle>
+              <CardDescription>Register another SIP-010 asset.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <label>
+                  Symbol
+                  <input
+                    value={tokenDraft.symbol}
+                    onChange={(event) =>
+                      setTokenDraft((current) => ({
+                        ...current,
+                        symbol: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Name
+                  <input
+                    value={tokenDraft.name}
+                    onChange={(event) =>
+                      setTokenDraft((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Contract
+                  <input
+                    placeholder="SP...token-name"
+                    value={tokenDraft.contract}
+                    onChange={(event) =>
+                      setTokenDraft((current) => ({
+                        ...current,
+                        contract: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Decimals
+                  <input
+                    type="number"
+                    min={0}
+                    value={tokenDraft.decimals}
+                    onChange={(event) =>
+                      setTokenDraft((current) => ({
+                        ...current,
+                        decimals: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button className="primary" onClick={handleAddToken}>
+                  Add token
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         <section className="grid">
           <article className="panel">
             <h2>Create Loan</h2>
@@ -914,6 +1133,52 @@ export default function App() {
             </div>
             <div className="panel-grid">
               <label>
+                Principal token
+                <select
+                  value={createForm.principalIsStx ? "stx" : selectedPrincipalTokenId}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (next === "stx") {
+                      setCreateForm((current) => ({ ...current, principalIsStx: true }));
+                      return;
+                    }
+                    setSelectedPrincipalTokenId(next);
+                    setCreateForm((current) => ({ ...current, principalIsStx: false }));
+                  }}
+                >
+                  <option value="stx">STX</option>
+                  {tokens.map((token) => (
+                    <option key={token.id} value={token.id}>
+                      {token.symbol}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Collateral token
+                <select
+                  value={createForm.collateralIsStx ? "stx" : selectedCollateralTokenId}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (next === "stx") {
+                      setCreateForm((current) => ({ ...current, collateralIsStx: true }));
+                      return;
+                    }
+                    setSelectedCollateralTokenId(next);
+                    setCreateForm((current) => ({ ...current, collateralIsStx: false }));
+                  }}
+                >
+                  <option value="stx">STX</option>
+                  {tokens.map((token) => (
+                    <option key={token.id} value={token.id}>
+                      {token.symbol}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="panel-grid">
+              <label>
                 APR preset
                 <select
                   value={aprPreset}
@@ -1000,7 +1265,7 @@ export default function App() {
                       }))
                     }
                   />
-                  sBTC
+                  {selectedPrincipalToken?.symbol ?? "Token"}
                 </label>
                 <label className="chip">
                   <input
@@ -1045,7 +1310,7 @@ export default function App() {
                       }))
                     }
                   />
-                  sBTC
+                  {selectedCollateralToken?.symbol ?? "Token"}
                 </label>
               </div>
             </div>
@@ -1155,9 +1420,9 @@ export default function App() {
                 >
                   <option value="all">All</option>
                   <option value="principal-stx">Principal: STX</option>
-                  <option value="principal-sbtc">Principal: sBTC</option>
+                  <option value="principal-token">Principal: Token</option>
                   <option value="collateral-stx">Collateral: STX</option>
-                  <option value="collateral-sbtc">Collateral: sBTC</option>
+                  <option value="collateral-token">Collateral: Token</option>
                 </select>
               </label>
               <label>
