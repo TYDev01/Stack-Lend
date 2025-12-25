@@ -260,6 +260,24 @@ button.ghost {
   overflow-x: auto;
 }
 
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .panel.wide {
+    grid-column: auto;
+  }
+
+  .panel-header {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-grid.compact {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -282,5 +300,41 @@ button.ghost {
 
   .panel {
     padding: 18px;
+  }
+
+  .hero-card {
+    border-radius: 16px;
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-grid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-group {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row {
+    flex-direction: column;
+  }
+
+  .action-row button {
+    width: 100%;
+  }
+
+  .loan-card {
+    gap: 8px;
+  }
+
+  .loan-card .loan-tag {
+    font-size: 0.8rem;
+  }
+
+  .log {
+    padding: 14px;
   }
 }
