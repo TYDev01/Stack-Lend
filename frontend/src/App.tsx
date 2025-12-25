@@ -112,6 +112,7 @@ export default function App() {
   const { address, isConnected } = useAppKitAccount();
   const [config, setConfig] = useState(defaultConfig);
   const [currentBlock, setCurrentBlock] = useState(0);
+  const [reminderWindow, setReminderWindow] = useState(50);
   const [logs, setLogs] = useState<string[]>([
     `${new Date().toLocaleTimeString()} Ready. Connect a wallet to get started.`,
   ]);
@@ -245,6 +246,74 @@ export default function App() {
         ))}
       </div>
     );
+  };
+
+  const reminders = useMemo(() => {
+    if (currentBlock === 0) {
+      return [];
+    }
+    const windowSize = Math.max(0, reminderWindow);
+    const upcomingLoans = scannedLoans.filter((loan) => {
+      if (loan.status !== STATUS.FUNDED) return false;
+      const delta = loan.endBlock - currentBlock;
+      return delta > 0 && delta <= windowSize;
+    });
+    const overdueLoans = scannedLoans.filter(
+      (loan) => loan.status === STATUS.FUNDED && loan.endBlock <= currentBlock
+    );
+
+    const upcomingBorrower = upcomingLoans.filter((loan) =>
+      address ? normalizeAddress(loan.borrower) === normalizeAddress(address) : true
+    );
+    const upcomingLender = upcomingLoans.filter((loan) =>
+      address ? normalizeAddress(loan.lender) === normalizeAddress(address) : true
+    );
+    const overdueBorrower = overdueLoans.filter((loan) =>
+      address ? normalizeAddress(loan.borrower) === normalizeAddress(address) : true
+    );
+    const overdueLender = overdueLoans.filter((loan) =>
+      address ? normalizeAddress(loan.lender) === normalizeAddress(address) : true
+    );
+
+    const items: { id: string; message: string; tone: string }[] = [];
+    upcomingBorrower.forEach((loan) => {
+      items.push({
+        id: `borrower-upcoming-${loan.id}`,
+        message: `Borrower reminder: Loan #${loan.id} ends in ${
+          loan.endBlock - currentBlock
+        } blocks.`,
+        tone: "border-amber-200 bg-amber-50 text-amber-700",
+      });
+    });
+    upcomingLender.forEach((loan) => {
+      items.push({
+        id: `lender-upcoming-${loan.id}`,
+        message: `Lender heads-up: Loan #${loan.id} ends in ${
+          loan.endBlock - currentBlock
+        } blocks.`,
+        tone: "border-sky-200 bg-sky-50 text-sky-700",
+      });
+    });
+    overdueBorrower.forEach((loan) => {
+      items.push({
+        id: `borrower-overdue-${loan.id}`,
+        message: `Borrower alert: Loan #${loan.id} is past due.`,
+        tone: "border-rose-200 bg-rose-50 text-rose-700",
+      });
+    });
+    overdueLender.forEach((loan) => {
+      items.push({
+        id: `lender-overdue-${loan.id}`,
+        message: `Lender alert: Loan #${loan.id} is past due.`,
+        tone: "border-rose-200 bg-rose-50 text-rose-700",
+      });
+    });
+
+    return items;
+  }, [address, currentBlock, reminderWindow, scannedLoans]);
+
+  const pushReminder = (message: string) => {
+    setLogs((current) => logLine(`Reminder queued: ${message}`, current));
   };
 
   const handleConnect = () => {
@@ -547,6 +616,85 @@ export default function App() {
               </div>
             </TabsContent>
           </Tabs>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Wallet-Based Notifications</CardTitle>
+              <CardDescription>
+                Create reminders for upcoming end-block deadlines based on the latest scan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-[200px]">
+                  <label className="label">Reminder window (blocks)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={reminderWindow}
+                    onChange={(event) => setReminderWindow(Number(event.target.value))}
+                  />
+                </div>
+                <Badge className="border-neutral-200 bg-white">
+                  Current block {currentBlock || "Not set"}
+                </Badge>
+                <Badge className="border-neutral-200 bg-white">
+                  {address ? "Filtered to wallet" : "Connect wallet for targeting"}
+                </Badge>
+              </div>
+              <div className="mt-4 space-y-2">
+                {reminders.length ? (
+                  reminders.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+                    >
+                      <Badge className={item.tone}>{item.message}</Badge>
+                      <button
+                        className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition hover:bg-neutral-50"
+                        onClick={() => pushReminder(item.message)}
+                      >
+                        Add to activity log
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-neutral-500">
+                    No upcoming reminders yet. Set current block and scan loans to populate
+                    alerts.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Reminder Summary</CardTitle>
+              <CardDescription>Quick totals for your wallet view.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Upcoming</span>
+                  <span className="font-semibold">
+                    {reminders.filter((item) => item.id.includes("upcoming")).length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Overdue</span>
+                  <span className="font-semibold">
+                    {reminders.filter((item) => item.id.includes("overdue")).length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Total reminders</span>
+                  <span className="font-semibold">{reminders.length}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="grid">
