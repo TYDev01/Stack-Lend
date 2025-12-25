@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { openContractCall } from "@stacks/connect";
 import { AppConfig, UserSession } from "@stacks/connect";
 import { StacksMainnet, StacksTestnet } from "@stacks/network";
@@ -255,6 +256,7 @@ const callCreate = async (config: ContractConfig, data: Parameters<typeof create
 
 export default function App() {
   const { address, isConnected, connect, isConnecting, chainId } = useWallet();
+  const location = useLocation();
   const [config, setConfig] = useState(defaultConfig);
   const [currentBlock, setCurrentBlock] = useState(0);
   const [reminderWindow, setReminderWindow] = useState(50);
@@ -368,6 +370,9 @@ export default function App() {
   const isCooldownActive = Date.now() - lastActionAt < cooldownMs;
 
   const t = (key: string) => I18N[language][key] ?? I18N.en[key] ?? key;
+  const isDashboard = location.pathname === "/";
+  const isLoans = location.pathname === "/loans";
+  const isAdmin = location.pathname === "/admin";
 
   const expectedChainId = config.apiUrl.includes("mainnet")
     ? "stacks:mainnet"
@@ -1018,73 +1023,13 @@ export default function App() {
         ))}
       </div>
       <main className="container">
-        <header className="hero">
+        <header className="topbar">
           <div>
             <p className="eyebrow">P2P Lending on Stacks</p>
             <h1>{t("heroTitle")}</h1>
             <p className="subtitle">{t("heroSubtitle")}</p>
           </div>
-          <div className="hero-card">
-            <p className="meta">Network</p>
-            <div className="row">
-              <label className="label">API base URL</label>
-              <input
-                value={config.apiUrl}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    apiUrl: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="row">
-              <label className="label">Contract address</label>
-              <input
-                placeholder="ST... or SP..."
-                value={config.address}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    address: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="row">
-              <label className="label">Contract name</label>
-              <input
-                value={config.name}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="row">
-              <label className="label">Read-only sender</label>
-              <input
-                placeholder="ST... or SP..."
-                value={config.readOnlySender}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    readOnlySender: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="row">
-              <label className="label">Current block height (optional)</label>
-              <input
-                type="number"
-                min={0}
-                value={currentBlock || ""}
-                onChange={(event) => setCurrentBlock(Number(event.target.value))}
-              />
-            </div>
+          <div className="topbar-actions">
             <button className="primary" onClick={handleConnect} disabled={isConnecting}>
               {isConnected
                 ? `${t("connectedWallet")}: ${address}`
@@ -1119,7 +1064,20 @@ export default function App() {
           </div>
         </header>
 
-        <section className="space-y-6">
+        <nav className="nav-links">
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/loans" className={({ isActive }) => (isActive ? "active" : "")}>
+            Loans
+          </NavLink>
+          <NavLink to="/admin" className={({ isActive }) => (isActive ? "active" : "")}>
+            Admin
+          </NavLink>
+        </nav>
+
+        {isDashboard ? (
+          <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="eyebrow">{t("dashboards")}</p>
@@ -1292,7 +1250,9 @@ export default function App() {
             </TabsContent>
           </Tabs>
         </section>
+        ) : null}
 
+        {isDashboard ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1357,7 +1317,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
+        {isDashboard ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1456,8 +1418,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
-        {import.meta.env.DEV ? (
+        {isAdmin && import.meta.env.DEV ? (
           <section className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
@@ -1540,8 +1503,16 @@ export default function App() {
               </CardContent>
             </Card>
           </section>
+        ) : isAdmin ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin</CardTitle>
+              <CardDescription>Diagnostics are available in dev mode.</CardDescription>
+            </CardHeader>
+          </Card>
         ) : null}
 
+        {isDashboard ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1620,7 +1591,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
+        {isLoans ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1743,7 +1716,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
+        {isLoans ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1843,7 +1818,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
+        {isLoans ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -1989,7 +1966,9 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
+        ) : null}
 
+        {isLoans ? (
         <section className="grid">
           <article className="panel">
             <h2>{t("createLoan")}</h2>
@@ -2709,6 +2688,7 @@ export default function App() {
             </div>
           </article>
         </section>
+        ) : null}
 
         <section className="panel log-panel">
           <h2>{t("activityLog")}</h2>
