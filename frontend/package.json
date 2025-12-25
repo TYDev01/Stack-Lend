@@ -11,16 +11,22 @@
   "dependencies": {
     "@reown/appkit": "^1.0.0",
     "@reown/appkit-adapter-stacks": "^1.0.0",
+    "@radix-ui/react-tabs": "^1.1.1",
     "@stacks/connect": "^8.0.0",
     "@stacks/network": "^6.9.0",
     "@stacks/transactions": "^7.2.0",
+    "clsx": "^2.1.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.11",
     "typescript": "^5.6.2",
     "vite": "^5.4.6"
   }

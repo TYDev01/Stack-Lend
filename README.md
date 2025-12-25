@@ -27,6 +27,12 @@ npm run dev
 
 Then visit `http://localhost:5173` and enter your deployed contract address.
 
+Set the Reown AppKit project id in `frontend/.env`:
+
+```
+VITE_REOWN_PROJECT_ID=your_project_id
+```
+
 ## Usage notes
 
 - The borrower escrows collateral when calling `create-loan`.
