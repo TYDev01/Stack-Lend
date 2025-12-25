@@ -86,6 +86,13 @@ type LoanSnapshot = {
   collateralIsStx: boolean;
 };
 
+type ToastItem = {
+  id: number;
+  title: string;
+  message: string;
+  tone: "info" | "success" | "error";
+};
+
 const formatLoan = (
   loanId: number,
   loan: Loan,
@@ -240,6 +247,7 @@ export default function App() {
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
   const [lastActionAt, setLastActionAt] = useState(0);
   const [cooldownMs, setCooldownMs] = useState(2000);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const defaultToken = useMemo(
     () => tokens.find((token) => token.id === defaultTokenId) ?? tokens[0],
@@ -289,6 +297,14 @@ export default function App() {
   }, [scanRange]);
 
   const isCooldownActive = Date.now() - lastActionAt < cooldownMs;
+
+  const pushToast = (title: string, message: string, tone: ToastItem["tone"]) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((current) => [...current, { id, title, message, tone }]);
+    setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 6000);
+  };
 
   const repaymentSummary = useMemo(() => {
     const principal = calcInput.principal;
@@ -565,21 +581,32 @@ export default function App() {
   const handleCreate = async () => {
     if (isCooldownActive) {
       setLogs((current) => logLine("Slow down: action cooldown active.", current));
+      pushToast("Cooldown", "Please wait before submitting another transaction.", "info");
       return;
     }
     if (!config.address) {
       setLogs((current) =>
         logLine("Enter contract address before creating a loan.", current)
       );
+      pushToast("Missing config", "Add the contract address before creating a loan.", "error");
       return;
     }
     if (createErrors.length) {
       setLogs((current) => logLine("Fix create form validation errors.", current));
+      pushToast("Validation error", "Fix the create loan form inputs.", "error");
       return;
     }
-    await callCreate(config, createForm);
-    setLastActionAt(Date.now());
-    setLogs((current) => logLine("Create-loan submitted.", current));
+    try {
+      pushToast("Submitting", "Review and approve create-loan in your wallet.", "info");
+      await callCreate(config, createForm);
+      setLastActionAt(Date.now());
+      setLogs((current) => logLine("Create-loan submitted.", current));
+      pushToast("Submitted", "Create-loan transaction submitted.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setLogs((current) => logLine(`Create-loan failed: ${message}`, current));
+      pushToast("Submission failed", message, "error");
+    }
   };
 
   const applyPresets = (principal = createForm.principalAmount, duration = createForm.duration) => {
@@ -670,27 +697,36 @@ export default function App() {
       setLogs((current) =>
         logLine("Provide API URL, contract, and read-only sender.", current)
       );
+      pushToast("Missing config", "Set API URL, contract, and read-only sender.", "error");
       return;
     }
 
     if (!ids.length) {
       setLogs((current) => logLine("No loan IDs to fetch.", current));
+      pushToast("Nothing to fetch", "Add loan IDs or scan a range first.", "info");
       return;
     }
 
     const cards: LoanSnapshot[] = [];
     const sources: Record<number, Loan> = {};
     for (const id of ids) {
-      const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
-      if (result && typeof result === "object" && "value" in result) {
-        const loan = (result as { value: Loan }).value;
-        cards.push(formatLoan(id, loan, defaultToken?.symbol ?? "SIP-010"));
-        sources[id] = loan;
+      try {
+        const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
+        if (result && typeof result === "object" && "value" in result) {
+          const loan = (result as { value: Loan }).value;
+          cards.push(formatLoan(id, loan, defaultToken?.symbol ?? "SIP-010"));
+          sources[id] = loan;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setLogs((current) => logLine(`Read-only failed (ID ${id}): ${message}`, current));
+        pushToast("Read-only error", `Loan ${id}: ${message}`, "error");
       }
     }
     setScannedLoans(cards);
     setLoanSources(sources);
     setLogs((current) => logLine(label, current));
+    pushToast("Loans refreshed", `${cards.length} loans loaded.`, "success");
     setPage(1);
     setSelectedLoanId((current) => {
       if (current === null) {
@@ -707,26 +743,38 @@ export default function App() {
   const handleAction = async (action: string) => {
     if (isCooldownActive) {
       setLogs((current) => logLine("Slow down: action cooldown active.", current));
+      pushToast("Cooldown", "Please wait before submitting another transaction.", "info");
       return;
     }
     if (!config.address) {
       setLogs((current) =>
         logLine("Enter contract address before submitting a transaction.", current)
       );
+      pushToast("Missing config", "Add the contract address before submitting.", "error");
       return;
     }
     if (manageErrors.length) {
       setLogs((current) => logLine("Fix manage loan validation errors.", current));
+      pushToast("Validation error", "Fix the manage loan inputs.", "error");
       return;
     }
-    await callContract(config, action, loanIdArg(manageLoanId));
-    setLastActionAt(Date.now());
-    setLogs((current) => logLine(`${action} submitted.`, current));
+    try {
+      pushToast("Submitting", `Review and approve ${action}.`, "info");
+      await callContract(config, action, loanIdArg(manageLoanId));
+      setLastActionAt(Date.now());
+      setLogs((current) => logLine(`${action} submitted.`, current));
+      pushToast("Submitted", `${action} transaction submitted.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setLogs((current) => logLine(`${action} failed: ${message}`, current));
+      pushToast("Submission failed", message, "error");
+    }
   };
 
   const handleScan = async () => {
     if (scanErrors.length) {
       setLogs((current) => logLine("Fix scan validation errors.", current));
+      pushToast("Validation error", "Fix scan range before searching.", "error");
       return;
     }
     const ids: number[] = [];
@@ -752,6 +800,25 @@ export default function App() {
   return (
     <div className="page">
       <div className="glow" />
+      <div className="fixed right-6 top-6 z-50 flex w-[320px] flex-col gap-2">
+        {toasts.map((toast) => (
+          <Card
+            key={toast.id}
+            className={`border ${
+              toast.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : toast.tone === "error"
+                ? "border-rose-200 bg-rose-50 text-rose-900"
+                : "border-sky-200 bg-sky-50 text-sky-900"
+            }`}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">{toast.title}</CardTitle>
+              <CardDescription className="text-xs">{toast.message}</CardDescription>
+            </CardHeader>
+          </Card>
+        ))}
+      </div>
       <main className="container">
         <header className="hero">
           <div>
