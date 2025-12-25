@@ -3,6 +3,9 @@ import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import { openContractCall } from "@stacks/connect";
 import { AppConfig, UserSession } from "@stacks/connect";
 import { StacksMainnet, StacksTestnet } from "@stacks/network";
+import { Badge } from "./components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import {
   callReadOnly,
   createLoanArgs,
@@ -29,13 +32,44 @@ const logLine = (message: string, current: string[]) => [
   ...current,
 ].slice(0, 20);
 
-const formatLoan = (loanId: number, loan: Loan) => ({
+const STATUS_LABELS: Record<string, string> = {
+  [STATUS.OPEN.toString()]: "Open",
+  [STATUS.FUNDED.toString()]: "Funded",
+  [STATUS.REPAID.toString()]: "Repaid",
+  [STATUS.DEFAULTED.toString()]: "Defaulted",
+  [STATUS.CANCELLED.toString()]: "Cancelled",
+};
+
+type LoanSnapshot = {
+  id: number;
+  principal: string;
+  collateral: string;
+  repay: string;
+  duration: string;
+  status: bigint;
+  borrower: string;
+  lender?: string | null;
+  endBlock: number;
+};
+
+const formatLoan = (loanId: number, loan: Loan): LoanSnapshot => ({
   id: loanId,
   principal: `${loan.principal_is_stx ? "STX" : "sBTC"} ${loan.principal_amount}`,
   collateral: `${loan.collateral_is_stx ? "STX" : "sBTC"} ${loan.collateral_amount}`,
   repay: `${loan.repay_amount}`,
   duration: `${loan.end_block}`,
+  status: loan.status,
+  borrower: loan.borrower,
+  lender: loan.lender ?? null,
+  endBlock: Number(loan.end_block),
 });
+
+const formatAddress = (value?: string | null) => {
+  if (!value) return "—";
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+};
+
+const normalizeAddress = (value?: string | null) => value?.toLowerCase() ?? "";
 
 const callContract = async (
   config: ContractConfig,
@@ -77,6 +111,7 @@ export default function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount();
   const [config, setConfig] = useState(defaultConfig);
+  const [currentBlock, setCurrentBlock] = useState(0);
   const [logs, setLogs] = useState<string[]>([
     `${new Date().toLocaleTimeString()} Ready. Connect a wallet to get started.`,
   ]);
@@ -91,7 +126,7 @@ export default function App() {
   });
   const [manageLoanId, setManageLoanId] = useState(1);
   const [scanRange, setScanRange] = useState({ start: 1, end: 5 });
-  const [openLoans, setOpenLoans] = useState<ReturnType<typeof formatLoan>[]>([]);
+  const [scannedLoans, setScannedLoans] = useState<LoanSnapshot[]>([]);
 
   const canRead = useMemo(
     () =>
@@ -101,6 +136,116 @@ export default function App() {
       config.readOnlySender,
     [config]
   );
+
+  const openLoans = useMemo(
+    () => scannedLoans.filter((loan) => loan.status === STATUS.OPEN),
+    [scannedLoans]
+  );
+
+  const borrowerLoans = useMemo(() => {
+    if (!address) return scannedLoans;
+    const normalized = normalizeAddress(address);
+    return scannedLoans.filter(
+      (loan) => normalizeAddress(loan.borrower) === normalized
+    );
+  }, [address, scannedLoans]);
+
+  const lenderLoans = useMemo(() => {
+    if (!address) {
+      return scannedLoans.filter((loan) => Boolean(loan.lender));
+    }
+    const normalized = normalizeAddress(address);
+    return scannedLoans.filter(
+      (loan) => normalizeAddress(loan.lender) === normalized
+    );
+  }, [address, scannedLoans]);
+
+  const buildDashboard = (loans: LoanSnapshot[]) => {
+    const dueLoans =
+      currentBlock > 0
+        ? loans.filter(
+            (loan) =>
+              loan.status === STATUS.FUNDED && loan.endBlock <= currentBlock
+          )
+        : [];
+    const activeLoans = loans.filter(
+      (loan) =>
+        loan.status === STATUS.FUNDED &&
+        (currentBlock === 0 || loan.endBlock > currentBlock)
+    );
+    const defaultedLoans = loans.filter(
+      (loan) => loan.status === STATUS.DEFAULTED
+    );
+    return { activeLoans, dueLoans, defaultedLoans };
+  };
+
+  const borrowerDashboard = useMemo(
+    () => buildDashboard(borrowerLoans),
+    [borrowerLoans, currentBlock]
+  );
+
+  const lenderDashboard = useMemo(
+    () => buildDashboard(lenderLoans),
+    [lenderLoans, currentBlock]
+  );
+
+  const statusBadgeClass = (status: bigint) => {
+    switch (status) {
+      case STATUS.OPEN:
+        return "border-amber-200 bg-amber-50 text-amber-700";
+      case STATUS.FUNDED:
+        return "border-emerald-200 bg-emerald-50 text-emerald-700";
+      case STATUS.REPAID:
+        return "border-sky-200 bg-sky-50 text-sky-700";
+      case STATUS.DEFAULTED:
+        return "border-rose-200 bg-rose-50 text-rose-700";
+      case STATUS.CANCELLED:
+        return "border-neutral-200 bg-neutral-100 text-neutral-600";
+      default:
+        return "";
+    }
+  };
+
+  const renderLoanRows = (items: LoanSnapshot[], emptyLabel: string) => {
+    if (!items.length) {
+      return <p className="text-sm text-neutral-500">{emptyLabel}</p>;
+    }
+
+    return (
+      <div className="space-y-3">
+        {items.slice(0, 4).map((loan) => (
+          <div
+            key={loan.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200/70 bg-white/90 p-3 text-sm"
+          >
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">Loan #{loan.id}</span>
+                <Badge className={statusBadgeClass(loan.status)}>
+                  {STATUS_LABELS[loan.status.toString()] ?? "Unknown"}
+                </Badge>
+              </div>
+              <div className="text-xs text-neutral-500">
+                Borrower {formatAddress(loan.borrower)} • Lender{" "}
+                {formatAddress(loan.lender)}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
+              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                Principal {loan.principal}
+              </Badge>
+              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                Repay {loan.repay}
+              </Badge>
+              <Badge className="border-neutral-200 bg-neutral-50 text-neutral-600">
+                End block {loan.endBlock}
+              </Badge>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const handleConnect = () => {
     open();
@@ -136,17 +281,15 @@ export default function App() {
       return;
     }
 
-    const cards: ReturnType<typeof formatLoan>[] = [];
+    const cards: LoanSnapshot[] = [];
     for (let id = scanRange.start; id <= scanRange.end; id += 1) {
       const result = await callReadOnly(config, "get-loan", [uintCV(id)]);
       if (result && typeof result === "object" && "value" in result) {
         const loan = (result as { value: Loan }).value;
-        if (loan.status === STATUS.OPEN) {
-          cards.push(formatLoan(id, loan));
-        }
+        cards.push(formatLoan(id, loan));
       }
     }
-    setOpenLoans(cards);
+    setScannedLoans(cards);
     setLogs((current) =>
       logLine(`Scanned loans ${scanRange.start} → ${scanRange.end}.`, current)
     );
@@ -217,11 +360,194 @@ export default function App() {
                 }
               />
             </div>
+            <div className="row">
+              <label className="label">Current block height (optional)</label>
+              <input
+                type="number"
+                min={0}
+                value={currentBlock || ""}
+                onChange={(event) => setCurrentBlock(Number(event.target.value))}
+              />
+            </div>
             <button className="primary" onClick={handleConnect}>
               {isConnected ? `Connected: ${address}` : "Connect Wallet"}
             </button>
           </div>
         </header>
+
+        <section className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">Dashboards</p>
+              <h2 className="mb-2">Borrower + Lender Overview</h2>
+              <p className="subtitle small">
+                Track active positions, repayment pressure, and defaults from the
+                latest scan.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="border-neutral-200 bg-white">
+                Scanned loans {scannedLoans.length}
+              </Badge>
+              <Badge className="border-neutral-200 bg-white">
+                Current block {currentBlock || "Not set"}
+              </Badge>
+              <Badge className="border-neutral-200 bg-white">
+                {address ? "Filtered to wallet" : "Connect wallet for filtering"}
+              </Badge>
+            </div>
+          </div>
+          <Tabs defaultValue="borrower" className="w-full">
+            <TabsList>
+              <TabsTrigger value="borrower">Borrower</TabsTrigger>
+              <TabsTrigger value="lender">Lender</TabsTrigger>
+            </TabsList>
+            <TabsContent value="borrower">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Active Loans</CardTitle>
+                    <CardDescription>Funded loans currently in flight.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {borrowerDashboard.activeLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Repayments Due</CardTitle>
+                    <CardDescription>
+                      Set current block height to detect overdue loans.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {borrowerDashboard.dueLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Defaults</CardTitle>
+                    <CardDescription>Loans marked as defaulted.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {borrowerDashboard.defaultedLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Active Loans</CardTitle>
+                    <CardDescription>Borrower view of funded loans.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderLoanRows(
+                      borrowerDashboard.activeLoans,
+                      "No active loans yet."
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Repayment Pressure</CardTitle>
+                    <CardDescription>Funded loans at or past end block.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderLoanRows(
+                      borrowerDashboard.dueLoans,
+                      currentBlock
+                        ? "No repayments due."
+                        : "Add a current block to compute due loans."
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Defaults</CardTitle>
+                    <CardDescription>Borrower loans in default.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderLoanRows(
+                      borrowerDashboard.defaultedLoans,
+                      "No defaulted loans."
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+            <TabsContent value="lender">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Active Loans</CardTitle>
+                    <CardDescription>Capital currently deployed.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {lenderDashboard.activeLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Repayments Due</CardTitle>
+                    <CardDescription>Loans at or past end block.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {lenderDashboard.dueLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Defaults</CardTitle>
+                    <CardDescription>Loans with collateral claim pending.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-semibold">
+                      {lenderDashboard.defaultedLoans.length}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Active Loans</CardTitle>
+                    <CardDescription>Lender view of funded loans.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderLoanRows(
+                      lenderDashboard.activeLoans,
+                      "No active loans yet."
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Defaults</CardTitle>
+                    <CardDescription>Defaulted loans for recovery.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderLoanRows(
+                      lenderDashboard.defaultedLoans,
+                      "No defaulted loans."
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </section>
 
         <section className="grid">
           <article className="panel">
