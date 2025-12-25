@@ -233,6 +233,8 @@ export default function App() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
+  const [lastActionAt, setLastActionAt] = useState(0);
+  const [cooldownMs, setCooldownMs] = useState(2000);
 
   const defaultToken = useMemo(
     () => tokens.find((token) => token.id === defaultTokenId) ?? tokens[0],
@@ -248,6 +250,40 @@ export default function App() {
     () => tokens.find((token) => token.id === selectedCollateralTokenId) ?? defaultToken,
     [defaultToken, selectedCollateralTokenId, tokens]
   );
+
+  const createErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (createForm.loanId <= 0) errors.push("Loan ID must be greater than zero.");
+    if (createForm.duration <= 0) errors.push("Duration must be greater than zero.");
+    if (createForm.principalAmount <= 0) errors.push("Principal must be greater than zero.");
+    if (createForm.collateralAmount <= 0) errors.push("Collateral must be greater than zero.");
+    if (createForm.repayAmount < createForm.principalAmount) {
+      errors.push("Repay amount must be >= principal.");
+    }
+    if (createForm.principalIsStx === createForm.collateralIsStx) {
+      errors.push("Principal and collateral must be different assets.");
+    }
+    return errors;
+  }, [createForm]);
+
+  const manageErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (manageLoanId <= 0) errors.push("Loan ID must be greater than zero.");
+    return errors;
+  }, [manageLoanId]);
+
+  const scanErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (scanRange.start <= 0 || scanRange.end <= 0) {
+      errors.push("Scan IDs must be greater than zero.");
+    }
+    if (scanRange.start > scanRange.end) {
+      errors.push("Start ID must be <= End ID.");
+    }
+    return errors;
+  }, [scanRange]);
+
+  const isCooldownActive = Date.now() - lastActionAt < cooldownMs;
 
   useEffect(() => {
     localStorage.setItem(LOAN_INDEX_STORAGE_KEY, JSON.stringify(indexedLoanIds));
@@ -487,13 +523,22 @@ export default function App() {
   };
 
   const handleCreate = async () => {
+    if (isCooldownActive) {
+      setLogs((current) => logLine("Slow down: action cooldown active.", current));
+      return;
+    }
     if (!config.address) {
       setLogs((current) =>
         logLine("Enter contract address before creating a loan.", current)
       );
       return;
     }
+    if (createErrors.length) {
+      setLogs((current) => logLine("Fix create form validation errors.", current));
+      return;
+    }
     await callCreate(config, createForm);
+    setLastActionAt(Date.now());
     setLogs((current) => logLine("Create-loan submitted.", current));
   };
 
@@ -620,17 +665,30 @@ export default function App() {
   };
 
   const handleAction = async (action: string) => {
+    if (isCooldownActive) {
+      setLogs((current) => logLine("Slow down: action cooldown active.", current));
+      return;
+    }
     if (!config.address) {
       setLogs((current) =>
         logLine("Enter contract address before submitting a transaction.", current)
       );
       return;
     }
+    if (manageErrors.length) {
+      setLogs((current) => logLine("Fix manage loan validation errors.", current));
+      return;
+    }
     await callContract(config, action, loanIdArg(manageLoanId));
+    setLastActionAt(Date.now());
     setLogs((current) => logLine(`${action} submitted.`, current));
   };
 
   const handleScan = async () => {
+    if (scanErrors.length) {
+      setLogs((current) => logLine("Fix scan validation errors.", current));
+      return;
+    }
     const ids: number[] = [];
     for (let id = scanRange.start; id <= scanRange.end; id += 1) {
       ids.push(id);
@@ -1491,9 +1549,37 @@ export default function App() {
                 </label>
               </div>
             </div>
-            <button className="primary" onClick={handleCreate}>
+            <div className="panel-grid">
+              <label>
+                Action cooldown (ms)
+                <input
+                  type="number"
+                  min={500}
+                  value={cooldownMs}
+                  onChange={(event) => setCooldownMs(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Current status
+                <p className="hint">
+                  {isCooldownActive ? "Cooldown active" : "Ready"}
+                </p>
+              </label>
+            </div>
+            <button
+              className="primary"
+              onClick={handleCreate}
+              disabled={Boolean(createErrors.length) || isCooldownActive}
+            >
               Create loan
             </button>
+            {createErrors.length ? (
+              <div className="space-y-1 text-sm text-rose-600">
+                {createErrors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            ) : null}
             <p className="hint">Collateral is escrowed in the contract on create.</p>
           </article>
 
@@ -1511,15 +1597,39 @@ export default function App() {
               </label>
             </div>
             <div className="action-row">
-              <button onClick={() => handleAction("fund-loan")}>Fund loan</button>
-              <button onClick={() => handleAction("repay")}>Repay</button>
-              <button onClick={() => handleAction("claim-default")}>
+              <button
+                onClick={() => handleAction("fund-loan")}
+                disabled={Boolean(manageErrors.length) || isCooldownActive}
+              >
+                Fund loan
+              </button>
+              <button
+                onClick={() => handleAction("repay")}
+                disabled={Boolean(manageErrors.length) || isCooldownActive}
+              >
+                Repay
+              </button>
+              <button
+                onClick={() => handleAction("claim-default")}
+                disabled={Boolean(manageErrors.length) || isCooldownActive}
+              >
                 Claim default
               </button>
-              <button className="ghost" onClick={() => handleAction("cancel-loan")}>
+              <button
+                className="ghost"
+                onClick={() => handleAction("cancel-loan")}
+                disabled={Boolean(manageErrors.length) || isCooldownActive}
+              >
                 Cancel
               </button>
             </div>
+            {manageErrors.length ? (
+              <div className="space-y-1 text-sm text-rose-600">
+                {manageErrors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            ) : null}
             <p className="hint">
               Funding sends the principal to escrow and immediately releases it to
               the borrower.
@@ -1563,11 +1673,22 @@ export default function App() {
                     }
                   />
                 </label>
-                <button className="primary" onClick={handleScan}>
+                <button
+                  className="primary"
+                  onClick={handleScan}
+                  disabled={Boolean(scanErrors.length)}
+                >
                   Scan
                 </button>
               </div>
             </div>
+            {scanErrors.length ? (
+              <div className="space-y-1 text-sm text-rose-600">
+                {scanErrors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="hint">
                 Use the Loan Indexer to refresh known IDs without scanning ranges.
@@ -1750,16 +1871,28 @@ export default function App() {
                           Lifecycle Actions
                         </h3>
                         <div className="flex flex-wrap gap-2">
-                          <button onClick={() => handleAction("fund-loan")}>
+                          <button
+                            onClick={() => handleAction("fund-loan")}
+                            disabled={Boolean(manageErrors.length) || isCooldownActive}
+                          >
                             Fund loan
                           </button>
-                          <button onClick={() => handleAction("repay")}>Repay</button>
-                          <button onClick={() => handleAction("claim-default")}>
+                          <button
+                            onClick={() => handleAction("repay")}
+                            disabled={Boolean(manageErrors.length) || isCooldownActive}
+                          >
+                            Repay
+                          </button>
+                          <button
+                            onClick={() => handleAction("claim-default")}
+                            disabled={Boolean(manageErrors.length) || isCooldownActive}
+                          >
                             Claim default
                           </button>
                           <button
                             className="ghost"
                             onClick={() => handleAction("cancel-loan")}
+                            disabled={Boolean(manageErrors.length) || isCooldownActive}
                           >
                             Cancel
                           </button>
