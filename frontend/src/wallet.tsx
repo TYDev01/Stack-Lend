@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import UniversalProvider from "@walletconnect/universal-provider";
+import { createAppKit } from "@reown/appkit/react";
 
 type WalletContextValue = {
   address: string;
@@ -28,100 +28,121 @@ const projectId =
 const walletMetadata = {
   name: "Stacks Lend",
   description: "Peer-to-peer lending on Stacks",
-  url: "https://localhost",
+  url: "https://localhost:5173",
   icons: ["https://stacks.co/favicon.ico"],
 };
 
-const parseAccountAddress = (account: string) => {
-  const parts = account.split(":");
-  return parts[2] ?? account;
+const stacksTestnet = {
+  id: "testnet",
+  name: "Stacks Testnet",
+  chainNamespace: "stacks",
+  caipNetworkId: "stacks:testnet",
+  nativeCurrency: { name: "Stacks", symbol: "STX", decimals: 6 },
+  rpcUrls: {
+    default: { http: ["https://api.testnet.hiro.so"] },
+  },
+  blockExplorers: {
+    default: { name: "Hiro", url: "https://explorer.hiro.so" },
+  },
+  testnet: true,
 };
 
-const parseAccountChain = (account: string) => {
-  const parts = account.split(":");
-  return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : null;
+const stacksMainnet = {
+  id: "mainnet",
+  name: "Stacks Mainnet",
+  chainNamespace: "stacks",
+  caipNetworkId: "stacks:mainnet",
+  nativeCurrency: { name: "Stacks", symbol: "STX", decimals: 6 },
+  rpcUrls: {
+    default: { http: ["https://api.mainnet.hiro.so"] },
+  },
+  blockExplorers: {
+    default: { name: "Hiro", url: "https://explorer.hiro.so" },
+  },
+};
+
+const appKit = createAppKit({
+  projectId,
+  metadata: walletMetadata,
+  networks: [stacksTestnet, stacksMainnet],
+  defaultNetwork: stacksTestnet,
+  universalProviderConfigOverride: {
+    methods: {
+      stacks: [
+        "stx_getAddresses",
+        "stx_transferStx",
+        "stx_signMessage",
+        "stx_signTransaction",
+        "stx_signStructuredMessage",
+        "stx_callContract",
+      ],
+    },
+    chains: {
+      stacks: ["stacks:testnet", "stacks:mainnet"],
+    },
+    events: {
+      stacks: ["accountsChanged", "chainChanged"],
+    },
+    defaultChain: "stacks:testnet",
+  },
+});
+
+const parseCaipAddress = (caipAddress: string) => {
+  const parts = caipAddress.split(":");
+  return {
+    chainId: parts.length >= 2 ? `${parts[0]}:${parts[1]}` : null,
+    address: parts[2] ?? "",
+  };
 };
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [provider, setProvider] = useState<UniversalProvider | null>(null);
   const [address, setAddress] = useState("");
   const [chainId, setChainId] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const initProvider = useCallback(async () => {
-    if (provider) return provider;
-    const instance = await UniversalProvider.init({
-      projectId,
-      metadata: walletMetadata,
-    });
-    setProvider(instance);
-    return instance;
-  }, [provider]);
-
-  const updateFromAccounts = useCallback((accounts?: string[]) => {
-    if (!accounts?.length) {
+  const syncFromAppKit = useCallback(() => {
+    const caipAddress = appKit.getCaipAddress("stacks");
+    if (!caipAddress) {
       setAddress("");
       setChainId(null);
       return;
     }
-    const account = accounts[0];
-    setAddress(parseAccountAddress(account));
-    setChainId(parseAccountChain(account));
+    const parsed = parseCaipAddress(caipAddress);
+    setAddress(parsed.address);
+    setChainId(parsed.chainId);
   }, []);
 
   useEffect(() => {
-    if (!provider) return;
-
-    const handleAccounts = (accounts: string[]) => updateFromAccounts(accounts);
-    const handleSessionDelete = () => updateFromAccounts([]);
-
-    provider.on("accountsChanged", handleAccounts);
-    provider.on("session_delete", handleSessionDelete);
-
-    const sessionAccounts = provider.session?.namespaces?.stacks?.accounts;
-    if (sessionAccounts?.length) {
-      updateFromAccounts(sessionAccounts);
-    }
-
+    syncFromAppKit();
+    const unsubscribe = appKit.subscribeState(() => {
+      syncFromAppKit();
+    });
     return () => {
-      provider.removeListener("accountsChanged", handleAccounts);
-      provider.removeListener("session_delete", handleSessionDelete);
+      unsubscribe?.();
     };
-  }, [provider, updateFromAccounts]);
+  }, [syncFromAppKit]);
 
   const connect = useCallback(
     async (targetChainId: string) => {
       setIsConnecting(true);
       try {
-        const instance = await initProvider();
-        await instance.connect({
-          namespaces: {
-            stacks: {
-              methods: [
-                "stx_getAccounts",
-                "stx_signMessage",
-                "stx_signTransaction",
-                "stx_sendTransaction",
-              ],
-              chains: [targetChainId],
-              events: ["accountsChanged", "chainChanged"],
-            },
-          },
-        });
-        const accounts = instance.session?.namespaces?.stacks?.accounts;
-        updateFromAccounts(accounts);
+        const nextNetwork =
+          targetChainId === "stacks:mainnet" ? stacksMainnet : stacksTestnet;
+        await appKit.switchNetwork(nextNetwork);
+        await appKit.open({ view: "Connect", namespace: "stacks" });
+        syncFromAppKit();
       } finally {
         setIsConnecting(false);
       }
     },
-    [initProvider, updateFromAccounts]
+    [syncFromAppKit]
   );
 
   const disconnect = useCallback(async () => {
-    if (!provider) return;
-    await provider.disconnect();
-    updateFromAccounts([]);
-  }, [provider, updateFromAccounts]);
+    await appKit.disconnect("stacks");
+    setAddress("");
+    setChainId(null);
+  }, []);
 
   const value = useMemo(
     () => ({
