@@ -95,7 +95,6 @@ type ToastItem = {
 };
 
 type CsvRow = Record<string, string | number>;
-type Language = "en" | "es";
 
 const formatLoan = (
   loanId: number,
@@ -174,38 +173,6 @@ const toCsv = (rows: CsvRow[]) => {
   return lines.join("\n");
 };
 
-const I18N: Record<Language, Record<string, string>> = {
-  en: {
-    heroTitle: "Stacks Lend",
-    heroSubtitle:
-      "Fixed-term loans using escrow. Pair STX with sBTC for clean, predictable deals.",
-    connectWallet: "Connect Wallet",
-    connectedWallet: "Connected",
-    dashboards: "Dashboards",
-    loanExplorer: "Loan Explorer",
-    createLoan: "Create Loan",
-    manageLoans: "Manage Loans",
-    activityLog: "Activity Log",
-    exporter: "Export loan list CSV",
-    exportHistory: "Export repayment history CSV",
-    language: "Language",
-  },
-  es: {
-    heroTitle: "Stacks Lend",
-    heroSubtitle:
-      "Prestamos a plazo fijo con escrow. Combina STX con sBTC para acuerdos previsibles.",
-    connectWallet: "Conectar billetera",
-    connectedWallet: "Conectado",
-    dashboards: "Paneles",
-    loanExplorer: "Explorador de prestamos",
-    createLoan: "Crear prestamo",
-    manageLoans: "Gestionar prestamos",
-    activityLog: "Registro de actividad",
-    exporter: "Exportar prestamos CSV",
-    exportHistory: "Exportar historial CSV",
-    language: "Idioma",
-  },
-};
 
 const downloadCsv = (filename: string, rows: CsvRow[]) => {
   const csv = toCsv(rows);
@@ -315,7 +282,6 @@ export default function App() {
   const [lastActionAt, setLastActionAt] = useState(0);
   const [cooldownMs, setCooldownMs] = useState(2000);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [language, setLanguage] = useState<Language>("en");
   const [showDiagnostics, setShowDiagnostics] = useState(import.meta.env.DEV);
   const [diagLoanId, setDiagLoanId] = useState(1);
   const [diagResult, setDiagResult] = useState<string>("");
@@ -369,7 +335,6 @@ export default function App() {
 
   const isCooldownActive = Date.now() - lastActionAt < cooldownMs;
 
-  const t = (key: string) => I18N[language][key] ?? I18N.en[key] ?? key;
   const isDashboard = location.pathname === "/";
   const isLoans = location.pathname === "/loans";
   const isAdmin = location.pathname === "/admin";
@@ -1022,24 +987,32 @@ export default function App() {
           </Card>
         ))}
       </div>
-      <main className="container">
-        <header className="topbar">
-          <div>
+      <header className="site-header">
+        <div className="topbar">
+          <div className="topbar-brand">
             <p className="eyebrow">P2P Lending on Stacks</p>
-            <h1>{t("heroTitle")}</h1>
-            <p className="subtitle">{t("heroSubtitle")}</p>
+            <h1>Stacks Lend</h1>
           </div>
+          <nav className="nav-links">
+            <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+              Dashboard
+            </NavLink>
+            <NavLink to="/loans" className={({ isActive }) => (isActive ? "active" : "")}>
+              Loans
+            </NavLink>
+            <NavLink to="/admin" className={({ isActive }) => (isActive ? "active" : "")}>
+              Admin
+            </NavLink>
+          </nav>
           <div className="topbar-actions">
             <button className="primary" onClick={handleConnect} disabled={isConnecting}>
               {isConnected
-                ? `${t("connectedWallet")}: ${address}`
+                ? `Connected: ${address}`
                 : isConnecting
                 ? "Connecting..."
-                : t("connectWallet")}
+                : "Connect Wallet"}
             </button>
-            {chainId ? (
-              <p className="hint">WalletConnect chain: {chainId}</p>
-            ) : null}
+            {chainId ? <p className="hint">WalletConnect chain: {chainId}</p> : null}
             {hasChainMismatch ? (
               <div className="rounded-xl border border-amber-500/40 bg-amber-900/30 p-3 text-sm text-amber-200">
                 <p className="mb-2 font-semibold">Network mismatch</p>
@@ -1051,36 +1024,17 @@ export default function App() {
                 </button>
               </div>
             ) : null}
-            <div className="row">
-              <label className="label">{t("language")}</label>
-              <select
-                value={language}
-                onChange={(event) => setLanguage(event.target.value as Language)}
-              >
-                <option value="en">English</option>
-                <option value="es">Espanol</option>
-              </select>
-            </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <nav className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/loans" className={({ isActive }) => (isActive ? "active" : "")}>
-            Loans
-          </NavLink>
-          <NavLink to="/admin" className={({ isActive }) => (isActive ? "active" : "")}>
-            Admin
-          </NavLink>
-        </nav>
+      <main className="container">
 
         {isDashboard ? (
           <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="eyebrow">{t("dashboards")}</p>
+              <p className="eyebrow">Fixed-term loans using escrow. Pair STX with sBTC for clean, predictable deals.</p>
               <h2 className="mb-2">Borrower + Lender Overview</h2>
               <p className="subtitle small">
                 Track active positions, repayment pressure, and defaults from the
@@ -1971,7 +1925,7 @@ export default function App() {
         {isLoans ? (
         <section className="grid">
           <article className="panel">
-            <h2>{t("createLoan")}</h2>
+            <h2>Create Loan</h2>
             <div className="panel-grid">
               <label>
                 Loan ID
@@ -2288,7 +2242,7 @@ export default function App() {
           </article>
 
           <article className="panel">
-            <h2>{t("manageLoans")}</h2>
+          <h2>Manage Loans</h2>
             <div className="panel-grid">
               <label>
                 Loan ID
@@ -2343,7 +2297,7 @@ export default function App() {
           <article className="panel wide">
             <div className="panel-header">
               <div>
-                <h2>{t("loanExplorer")}</h2>
+                <h2>Loan Explorer</h2>
                 <p className="subtitle small">
                   Scan a range of loan IDs, then filter by asset, status, APR, or duration.
                 </p>
@@ -2631,7 +2585,7 @@ export default function App() {
                           Hook up an indexer later for detailed timestamps.
                         </p>
                         <button className="ghost" onClick={handleExportRepaymentHistory}>
-                          {t("exportHistory")}
+                          Export repayment history CSV
                         </button>
                       </div>
                     </div>
@@ -2649,7 +2603,7 @@ export default function App() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button className="ghost" onClick={handleExportLoans}>
-                  {t("exporter")}
+                  Export loan list CSV
                 </button>
                 <label className="text-sm text-slate-400">
                   Page size
@@ -2691,7 +2645,7 @@ export default function App() {
         ) : null}
 
         <section className="panel log-panel">
-          <h2>{t("activityLog")}</h2>
+          <h2>Activity Log</h2>
           <pre className="log">{logs.join("\n")}</pre>
         </section>
       </main>
